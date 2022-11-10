@@ -1,0 +1,9 @@
+__*__
+*.pyc
+*.sw?
+wandb/
+*.pth
+*.tar
+*.gz
+checkpoints/
+samples/
