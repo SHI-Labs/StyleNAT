@@ -1,4 +1,5 @@
 ## StyleNAT: Giving Each Head a New Perspective
+<a href="https://arxiv.org/abs/2211.05770"><img src="https://img.shields.io/badge/arxiv-https%3A%2F%2Farxiv.org%2Fabs%2F2211.05770-red"/></a>
 ##### Authors: [Steven Walton](https://github.com/stevenwalton), [Ali Hassani](https://github.com/alihassanijr), [Xingqian Xu](https://github.com/xingqian2018), Zhangyang Wang, [Humphrey Shi](https://github.com/honghuis)
 
 ![header](images/header.png)
@@ -37,8 +38,8 @@ Church 256 | 3.400  | - | - |
     title         = {StyleNAT: Giving Each Head a New Perspective},
     author        = {Steven Walton and Ali Hassani and Xingqian Xu and Zhangyang Wang and Humphrey Shi},
     year          = 2022,
-    url           = {https://arxiv.org/abs/},
-    eprint        = {},
+    url           = {https://arxiv.org/abs/2211.05770},
+    eprint        = {2211.05770},
     archiveprefix = {arXiv},
     primaryclass  = {cs.CV}
 }
