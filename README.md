@@ -49,13 +49,15 @@ Note: some version issues can create poor FIDs. Always check your build
 environment first with the `evaluate` method. With the best FFHQ score you
 should always get under an FID < 2.10 (hopefully closer to 2.05). 
 
+Note: 
+[NATTEN can be sped up by using pre-built wheels directly.](https://shi-labs.com/natten/)
+
 ## Inference
 Using META's hydra-core we can easily run. We simply have to run
 ```bash
 python main.py type=inference
 ```
 Note that the first time you run this it will take some time, upfirdn2d is compiling. 
-[natten can be sped up by building wheels directly.](https://shi-labs.com/natten/)
 
 By default this will create 10 random inference images with a checkpoint and the
 names will be saved as the name of the random seed.
@@ -95,7 +97,7 @@ This code heavily relies upon
 [StyleSwin](https://github.com/microsoft/StyleSwin) which also relies upon
 [rosinality's StyleGAN2-pytorch](https://github.com/rosinality/stylegan2-pytorch) library.
 We also utilize [mseitzer's pytorch-fid](https://github.com/mseitzer/pytorch-fid).
-Finally, we utilize SHI-Lab's [Neighborhood-Attention-Transformer](https://github.com/SHI-Labs/Neighborhood-Attention-Transformer).
+Finally, we utilize SHI-Lab's [NATTEN](https://github.com/SHI-Labs/NATTEN/).
 
 We'd also like to thank Intelligence Advanced Research Projects Activity
 (IARPA), University of Oregon, University of Illinois at Urbana-Champaign, and
