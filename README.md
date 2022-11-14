@@ -30,11 +30,53 @@ These results show a 6.4% improvement on FFHQ-256 scores when compared to StyleG
 ## Performance
 ![compute](images/fidparams.png)
 
-Dataset | FID | Throughput (imgs/s) | Number of Parameters (M) |
-|:---:|:---:|:---:|:---:|
-FFHQ 256 | 2.046 | 32.56 | 48.92 |
-FFHQ 1024 | 4.174  | - | - |
+Dataset | FID | Throughput (imgs/s) | Number of Parameters (M) | Checkpoint
+|:---:|:---:|:---:|:---:|:---:|
+FFHQ 256 | 2.046 | 32.56 | 48.92 | [download](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ256_940k_flip.pt)
+FFHQ 1024 | 4.174  | - | - | [download](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ1024_700k.pt)
 Church 256 | 3.400  | - | - |
+
+## Building and Using StyleNAT
+We recommend building an environment with conda to get the best performance. We
+recommend the following build instructions but your millage may vary.
+```bash
+conda create --name stylenat python=3.10
+conda activate stylenat
+conda install pytorch torchvision cudatoolkit=11.6 -c pytorch -c nvidia
+pip install -r requirements.txt
+```
+Note: some version issues can create poor FIDs. Always check your build
+environment first with the `evaluate` method. With the best FFHQ score you
+should always get under an FID < 2.10 (hopefully closer to 2.05). 
+
+Note: 
+[NATTEN can be sped up by using pre-built wheels directly.](https://shi-labs.com/natten/)
+
+## Inference
+Using META's hydra-core we can easily run. We simply have to run
+```bash
+python main.py type=inference
+```
+Note that the first time you run this it will take some time, upfirdn2d is compiling. 
+
+By default this will create 10 random inference images with a checkpoint and the
+names will be saved as the name of the random seed.
+
+## Evaluation
+It is good to check your environment and we provide an evaluation option to
+verify this and our checkpoints (not that there is some variance).
+```bash
+python main.py type=evaluation
+```
+
+## Modifying Hydra-Configs
+The `confs` directory holds yaml configs for different types of runs. If you would
+like to adjust parameters (such as changing checkpoints, inference, number of
+images, specifying seeds, and so on) you should edit this file. The `confs/runs` folder holds
+parameters for the model and training options. It is not advised to modify these
+files. It is better to copy them to a new file and use those if you wish to
+train a new model.
+
 
 
 ## Citation:
@@ -49,3 +91,14 @@ Church 256 | 3.400  | - | - |
     primaryclass  = {cs.CV}
 }
 ```
+
+## Acknowledgements
+This code heavily relies upon
+[StyleSwin](https://github.com/microsoft/StyleSwin) which also relies upon
+[rosinality's StyleGAN2-pytorch](https://github.com/rosinality/stylegan2-pytorch) library.
+We also utilize [mseitzer's pytorch-fid](https://github.com/mseitzer/pytorch-fid).
+Finally, we utilize SHI-Lab's [NATTEN](https://github.com/SHI-Labs/NATTEN/).
+
+We'd also like to thank Intelligence Advanced Research Projects Activity
+(IARPA), University of Oregon, University of Illinois at Urbana-Champaign, and
+Picsart AI Research (PAIR) for their generous support. 

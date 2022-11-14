@@ -1,0 +1,11 @@
+lmdb
+timm
+scipy
+sklearn
+einops
+tqdm
+wandb
+ninja
+natten==0.14.4
+hydra-core
+joblib
