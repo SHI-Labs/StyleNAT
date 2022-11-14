@@ -30,10 +30,10 @@ These results show a 6.4% improvement on FFHQ-256 scores when compared to StyleG
 ## Performance
 ![compute](images/fidparams.png)
 
-Dataset | FID | Throughput (imgs/s) | Number of Parameters (M) |
+Dataset | FID | Throughput (imgs/s) | Number of Parameters (M) | Checkpoint
 |:---:|:---:|:---:|:---:|
-FFHQ 256 | 2.046 | 32.56 | 48.92 |
-FFHQ 1024 | 4.174  | - | - |
+FFHQ 256 | 2.046 | 32.56 | 48.92 | [download](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ256_940k_flip.pt)
+FFHQ 1024 | 4.174  | - | - | [download](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ1024_700k.pt)
 Church 256 | 3.400  | - | - |
 
 ## Building and Using StyleNAT
