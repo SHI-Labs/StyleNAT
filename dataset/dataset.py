@@ -8,6 +8,8 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms as T
 from torchvision import datasets
 
+from utils.distributed import get_rank
+
 
 class MultiResolutionDataset(Dataset):
     def __init__(self, path, transform, resolution=256):
@@ -67,23 +69,27 @@ def get_dataset(args, evaluation=True):
     transforms = T.Compose(transforms)
 
     if args.dataset.lmdb:
-        print(f"Using LMDB with {args.dataset.path}")
+        if get_rank() == 0:
+            print(f"Using LMDB with {args.dataset.path}")
         dataset = MultiResolutionDataset(path=args.dataset.path,
                                          transform=transforms,
                                          resolution=args.runs.size)
     elif args.dataset.name in ["church"]:
         if args.dataset.name == "church":
             classes = ['church_outdoor_train']
-        print(f"Using LSUN {classes}")
+        if get_rank() == 0:
+            print(f"Using LSUN {classes}")
         dataset = datasets.LSUN(root=args.dataset.path,
                                 transform=transforms,
                                 classes=classes)
     elif args.dataset.name in ["cifar10"]:
-        print(f"Loading CIFAR-10")
+        if get_rank() == 0:
+            print(f"Loading CIFAR-10")
         dataset = datasets.CIFAR10(root=args.dataset.path,
                                    transform=transforms)
     else:
-        print(f"Loading ImageFolder dataset from {args.dataset.path}")
+        if get_rank() == 0:
+            print(f"Loading ImageFolder dataset from {args.dataset.path}")
         dataset = datasets.ImageFolder(root=args.dataset.path,
                                        transform=transforms)
     return dataset

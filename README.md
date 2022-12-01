@@ -30,10 +30,10 @@ These results show a 6.4% improvement on FFHQ-256 scores when compared to StyleG
 ## Performance
 ![compute](images/fidparams.png)
 
-Dataset | FID | Throughput (imgs/s) | Number of Parameters (M) | Checkpoint
-|:---:|:---:|:---:|:---:|:---:|
-FFHQ 256 | 2.046 | 32.56 | 48.92 | [download](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ256_940k_flip.pt)
-FFHQ 1024 | 4.174  | - | - | [download](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ1024_700k.pt)
+Dataset | FID | Throughput (imgs/s) | Number of Parameters (M) |
+|:---:|:---:|:---:|:---:|
+FFHQ 256 | [2.046](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ256_940k_flip.pt) | 32.56 | 48.92 |
+FFHQ 1024 | [4.174](https://shi-labs.com/projects/stylenat/checkpoints/FFHQ1024_700k.pt)  | - | 49.45 |
 Church 256 | 3.400  | - | - |
 
 ## Building and Using StyleNAT
@@ -49,24 +49,48 @@ Note: some version issues can create poor FIDs. Always check your build
 environment first with the `evaluate` method. With the best FFHQ score you
 should always get under an FID < 2.10 (hopefully closer to 2.05). 
 
-Note: 
-[NATTEN can be sped up by using pre-built wheels directly.](https://shi-labs.com/natten/)
-
 ## Inference
 Using META's hydra-core we can easily run. We simply have to run
 ```bash
 python main.py type=inference
 ```
 Note that the first time you run this it will take some time, upfirdn2d is compiling. 
+[natten can be sped up by building wheels directly.](https://shi-labs.com/natten/)
 
 By default this will create 10 random inference images with a checkpoint and the
 names will be saved as the name of the random seed.
 
+You can specify seeds by using
+```bash
+python main.py type=inference inference.seeds=[1,2,3,4]
+```
+If you would like to specify a set of seeds in a range use the following command
+`python main 'inference.seeds="range(start, stop, step)"'`
+
+
 ## Evaluation
-It is good to check your environment and we provide an evaluation option to
-verify this and our checkpoints (not that there is some variance).
+If you would like to check the performance of a model we provide the evaluation
+mode type. Simply run
 ```bash
 python main.py type=evaluation
+```
+See the config file to set the proper dataset, checkpoint, etc.
+
+# Training
+If you would like to train a model from scratch we provide the following mode
+```bash
+python main.py type=train restart.ckpt=null
+```
+We suggest explicitly setting the checkpoint to null so that you don't 
+accidentally load a checkpoint.
+It is also advised to create a new run file and call
+```bash
+python main.py type=train restart.ckpt=null runs=my_new_run
+```
+We also support distributed training. Simply use torchrun
+```bash
+torchrun --nnodes=$NUM_NODES --nproc_per_node=$NUM_GPUS --node_rank=$NODE_RANK
+main.py type=train
 ```
 
 ## Modifying Hydra-Configs
@@ -97,7 +121,7 @@ This code heavily relies upon
 [StyleSwin](https://github.com/microsoft/StyleSwin) which also relies upon
 [rosinality's StyleGAN2-pytorch](https://github.com/rosinality/stylegan2-pytorch) library.
 We also utilize [mseitzer's pytorch-fid](https://github.com/mseitzer/pytorch-fid).
-Finally, we utilize SHI-Lab's [NATTEN](https://github.com/SHI-Labs/NATTEN/).
+Finally, we utilize SHI-Lab's [Neighborhood-Attention-Transformer](https://github.com/SHI-Labs/Neighborhood-Attention-Transformer).
 
 We'd also like to thank Intelligence Advanced Research Projects Activity
 (IARPA), University of Oregon, University of Illinois at Urbana-Champaign, and

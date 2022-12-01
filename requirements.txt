@@ -6,6 +6,9 @@ einops
 tqdm
 wandb
 ninja
-natten==0.14.4
+natten
 hydra-core
 joblib
+dill
+imageio-ffmpeg
+ftfy
