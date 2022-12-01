@@ -572,7 +572,7 @@ class StyleBasicLayer(nn.Module):
                  kernel_size=None, dilation=None):
 
         super().__init__()
-        print(f"Input resolution {input_resolution} and block type {block_type}")
+        #print(f"Input resolution {input_resolution} and block type {block_type}")
         self.dim = dim
         self.input_resolution = input_resolution
         self.depth = depth
@@ -752,20 +752,21 @@ class Generator(nn.Module):
             32 *  args.channel_multiplier,
             16 *  args.channel_multiplier
         ]  
+        self.in_channels = in_channels
 
         end = int(math.log(self.size, 2))
         # Original min heads was 4
         num_heads = [max(c//32, self.min_heads) for c in in_channels]
-        print(f"Number of heads is {num_heads}")
+        # For verbose
+        #print(f"Number of heads is {num_heads}")
         full_resolution_index = int(math.log(args.enable_full_resolution, 2))
+        # For Swin
         window_sizes = [2 ** i if i <= full_resolution_index else 8 for i in range(start, end + 1)]
 
         self.input = ConstantInput(in_channels[0])
         self.layers = nn.ModuleList()
         self.to_rgbs = nn.ModuleList()
         num_layers = 0
-        print(f"Kernels: {self.kernels}")
-        print(f"Dilations: {self.dilations}")
         
         for i_layer in range(start, end + 1):
             in_channel = in_channels[i_layer - start]
@@ -795,6 +796,7 @@ class Generator(nn.Module):
             self.to_rgbs.append(to_rgb)
             num_layers += 2
 
+        #self.num_ws = num_layers
         self.n_latent = num_layers
         self.apply(self._init_weights)
 
@@ -813,30 +815,13 @@ class Generator(nn.Module):
             if hasattr(m, 'bias') and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
-    def forward(
-        self,
-        noise,
-        return_latents=False,
-        inject_index=None,
-        truncation=1,
-        truncation_latent=None,
-    ):
-        styles = self.style(noise)
-        inject_index = self.n_latent
+    def mapping_network(self, noise, c_samples=None):
+        latent = self.style(noise)
+        if latent.ndim < 3:
+            latent = latent.unsqueeze(1).repeat(1, self.n_latent, 1)
+        return latent
 
-        ## Modified to reflect official StyleGAN
-        #if truncation != 1:
-        #    # Update moving average of W
-        #    w_avg = torch.zeros(self.style_dim).to(noise.device)
-        #    w_avg.copy_(styles.detach().mean(dim=0).lerp(w_avg, 0.995))
-        #    # Apply truncation
-        #    styles = w_avg.lerp(styles, truncation)
-        
-        if styles.ndim < 3:
-            latent = styles.unsqueeze(1).repeat(1, inject_index, 1)
-        else:
-            latent = styles
-
+    def synthesis_network(self, latent, noise_mode='random', force_fp32=False):
         x = self.input(latent)
         B, C, H, W = x.shape
         x = x.permute(0, 2, 3, 1).contiguous().view(B, H * W, C)
@@ -854,11 +839,20 @@ class Generator(nn.Module):
         assert L == self.size * self.size
         x = x.reshape(B, self.size, self.size, C).permute(0, 3, 1, 2).contiguous()
         image = skip
+        return image
 
-        if return_latents:
-            return image, latent
-        else:
-            return image, None
+    def forward(
+        self,
+        noise,
+        return_latents=False,
+        inject_index=None,
+        truncation=1,
+        truncation_latent=None,
+    ):
+        latent = self.mapping_network(noise)
+        image = self.synthesis_network(latent)
+        return image, latent
+
 
     def flops(self):
         flops = 0

@@ -39,6 +39,8 @@ def save_images_batched(args, generator, steps=None, log_first_batch=True):
 
 @torch.no_grad()
 def evaluate(args, generator, steps=None, log_first_batch=True):
+    print(f" Parameters ".center(40, "-"))
+    print(f"Generator has:".ljust(19),f"{args.runs.generator.params:.4f} M Parameters")
     assert args.evaluation.save_path is not None,f"Inference save path needs to be defined"
     path = args.evaluation.save_path
     if steps is not None:

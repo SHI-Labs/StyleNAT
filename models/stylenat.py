@@ -185,7 +185,7 @@ class NeighborhoodAttentionSplitHead(nn.Module):
                  qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.,
                  dilation_0=1, dilation_1=1):
         super().__init__()
-        warnings.warn(f"Using Legacy Hydra-NA, this is depreciated. Please use "\
+        warnings.warn(f"Using Legacy Hydra-NA, this is deprecated. Please use "\
                       "HydraNeighborhoodAttention function instead")
         self.num_heads = num_heads
         self.head_dim = dim // self.num_heads

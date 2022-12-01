@@ -9,6 +9,7 @@ truncation: 1
 workers: 0
 
 defaults:
+    - _self_
     - runs: ffhq_256
 
 dataset:
@@ -22,26 +23,24 @@ logging:
     eval_freq: 50000
     save_freq: 25000
     checkpoint_path: /tmp
-    tf_log: False
     lmdb: False
     sample_path: /tmp
 
 evaluation:
-    gt_path: /data/datasets/ffhq_256/images
+    gt_path: /data/datasets/ffhq_256/images/
     num_batches: 12500
     total_size: 50000
     batch: 4
     save_path: evaluations/
 
 inference:
-    num_images: 20
-    save_seeds: True
-    seeds: null
+    num_images: 100
+    seeds: [10,13,32,45,60,87,92,96]
     save_path: sample_images/
     batch: 1
 
 restart:
-    ckpt: FFHQ_256_Flips_940k.pt
+    ckpt: null
     start_iter: 0
     auto_resume: False
 
