@@ -55,7 +55,6 @@ Using META's hydra-core we can easily run. We simply have to run
 python main.py type=inference
 ```
 Note that the first time you run this it will take some time, upfirdn2d is compiling. 
-[natten can be sped up by building wheels directly.](https://shi-labs.com/natten/)
 
 By default this will create 10 random inference images with a checkpoint and the
 names will be saved as the name of the random seed.
