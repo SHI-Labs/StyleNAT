@@ -49,6 +49,8 @@ Note: some version issues can create poor FIDs. Always check your build
 environment first with the `evaluate` method. With the best FFHQ score you
 should always get under an FID < 2.10 (hopefully closer to 2.05). 
 
+Note: 
+[NATTEN can be sped up by using pre-built wheels directly.](https://shi-labs.com/natten/)
 ## Inference
 Using META's hydra-core we can easily run. We simply have to run
 ```bash
