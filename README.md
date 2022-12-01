@@ -122,7 +122,7 @@ This code heavily relies upon
 [StyleSwin](https://github.com/microsoft/StyleSwin) which also relies upon
 [rosinality's StyleGAN2-pytorch](https://github.com/rosinality/stylegan2-pytorch) library.
 We also utilize [mseitzer's pytorch-fid](https://github.com/mseitzer/pytorch-fid).
-Finally, we utilize SHI-Lab's [Neighborhood-Attention-Transformer](https://github.com/SHI-Labs/Neighborhood-Attention-Transformer).
+Finally, we utilize SHI-Lab's [NATTEN](https://github.com/SHI-Labs/NATTEN/).
 
 We'd also like to thank Intelligence Advanced Research Projects Activity
 (IARPA), University of Oregon, University of Illinois at Urbana-Champaign, and
