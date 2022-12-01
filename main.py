@@ -9,9 +9,6 @@ from utils.distributed import get_rank, synchronize, get_world_size
 from src.train import train
 from src.inference import inference
 from src.evaluate import evaluate
-from src.interpolation import interpolate
-from src.inversion import inversion
-from src.stylemc import stylemc
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -87,14 +84,8 @@ def main(args):
               )
     elif args.type == "inference":
         inference(args=args, generator=g_ema)
-    elif args.type == "interpolate":
-        interpolate(args=args, generator=g_ema)
     elif args.type == "evaluate":
         evaluate(args=args, generator=g_ema)
-    elif args.type == "inversion":
-        inversion(args=args, generator=g_ema)
-    elif args.type == "stylemc":
-        stylemc(args=args, generator=g_ema)
 
 
 if __name__ == '__main__':
