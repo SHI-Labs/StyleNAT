@@ -6,7 +6,7 @@ einops
 tqdm
 wandb
 ninja
-natten
+natten>=0.14.6
 hydra-core
 joblib
 dill
