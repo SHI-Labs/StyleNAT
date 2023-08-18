@@ -108,7 +108,7 @@ class HydraNeighborhoodAttention(nn.Module):
         attention = [self.attn_drop(a) for a in attention]
 
         x = [natten2dav(_attn, _v, _k, _d) \
-             for _attn, _v, _d in zip(attention, v, self.kernel_sizes, self.dilations)]
+             for _attn, _v, _k, _d in zip(attention, v, self.kernel_sizes, self.dilations)]
 
         x = torch.cat(x, dim=1)
         x = x.permute(0, 2, 3, 1, 4).reshape(B, H, W, C)

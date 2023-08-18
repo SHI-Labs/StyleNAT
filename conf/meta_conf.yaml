@@ -1,0 +1,71 @@
+explanation_of_conf: |-
+    This file is an explanation of the configuration YAML file 
+    and every variable that is potentially used within the code.
+    Since hydra-core was made by META we'll be meta and write this meta conf.
+    Each section will denote if it is required (req) or optional (opt).
+    Each item in the section will similarly be noted and then given a type and
+    description of what it does.
+
+type: (req:str) Type of job that to perform supports {train,inference,evaluate}
+device: (opt:str) Which acceleration device we will use supports {cuda,cpu}
+world_size: (opt:int) The size of your world. In distributed.  This value will automatically be set in src/train.py Default 1
+rank: (opt:int) This is the rank of your GPU This value will automatically be set in src/train.py Default 1
+local_rank: (opt:int) Automatically set Default 0
+distributed: (opt:bool) Used in training Bool to determine if using distributed training default false
+truncation: (opt:float) Unused optional truncation used when generating images Edit eval to enable this
+workers: (opt:int) Number of workers to spawn for dataloader default 0 (use this)
+
+defaults:
+    - _self_
+    - runs: (req:str) Which yaml file to use from the run dir
+
+dataset:
+    (req for all)
+    name: (req:str) name of the dataset
+    path: (req:str) /path/to/dataset/
+    lmdb: (opt:bool) use the lmdb format overrides other options
+
+logging:
+    print_freq: (opt:int) frequency to print to std default 1000
+    eval_freq: (opt:int) frequency to evaluate, default -1
+    save_freq: (opt:int) frequency to save model checkpoint
+    checkpoint_path: (opt:str) where to save checkpoint, default /tmp
+    sample_path: (opt:str) where to save samples, default /tmp
+    reuse_samplepath: (opt:bool) write fid samples to same directory (save space)
+    wandb: (opt:bool) enable wandb logging
+    log_img_batch: (opt:bool) bool to log the first image batch 
+
+evaluation:
+    gt_path: (str) path to ground truth images/data
+    total_size: (int) number of fid images, typically 50000
+    batch: (opt:int) batch size for generator during fid calculation
+    attn_map: (opt:bool) generate attention maps (if wandb enabled, we log)
+    save_attn_map: (opt:bool) do you want to save the attention maps?
+    const_attn_seed: (opt:bool or int) Specify true or a integer seed 
+
+inference:
+    num_images: (int) number of images to sample
+    seeds: (list) list of seeds to sample, otherwise random
+    save_path: (str) where to save images relative to cwd
+    batch: (int) batch size of images to generate
+
+restart: options to restart a run
+    ckpt: (str) path to checkpoint
+    wandb_resume: (opt:str) see wandb.init resume
+    wandb_id: (opt:str) wandb run id
+    start_iter: (opt: int) you can manually specify the iteration but we'll try to figure it out
+    reuse_rng: (opt:bool) attempt to use the checkpoint's rng information
+
+misc:
+    seed: (opt:int) random seed for run
+    rng_state: (opt:tensor) (don't set!) the rng_state of the run
+    py_rng_state: (opt:list) (don't set!) the python random rng state
+
+wandb:
+    entity: (str) your username
+    project_name: (str): name of wandb project
+    run_name: (opt:str) name of your run
+    tags: (opt:list) list of tags for the run
+    description: (opt:str) description information for your run
+
+

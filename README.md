@@ -49,8 +49,19 @@ Note: some version issues can create poor FIDs. Always check your build
 environment first with the `evaluate` method. With the best FFHQ score you
 should always get under an FID < 2.10 (hopefully closer to 2.05). 
 
-Note: 
-[NATTEN can be sped up by using pre-built wheels directly.](https://shi-labs.com/natten/)
+Notes: 
+- [NATTEN can be sped up by using pre-built wheels directly.](https://shi-labs.com/natten/)
+
+- Some arguments and configurations have changed slightly. Everything should be
+backwards compatible but if they aren't please open an issue.
+
+- This is research code, not production. There are plenty of optimizations that
+can be implemented easily. We also are obsessive about logging information and
+storing into checkpoints. Official checkpoints may not have all information as
+current code tracks due to research and development. Most important things
+should exist but if you're missing something important open an issue. Sorry,
+seeds and rng states are only available if they exist in the checkpoints.
+
 ## Inference
 Using META's hydra-core we can easily run. We simply have to run
 ```bash
@@ -101,6 +112,11 @@ images, specifying seeds, and so on) you should edit this file. The `confs/runs`
 parameters for the model and training options. It is not advised to modify these
 files. It is better to copy them to a new file and use those if you wish to
 train a new model.
+
+## "Secret" Hydra args
+There's a few unspecified hydra configs around wandb. We're just providing a
+simple version. But we also support `tags` and `description` under this
+argument.
 
 
 

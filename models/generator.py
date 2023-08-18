@@ -15,6 +15,7 @@ import torch
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import to_2tuple, trunc_normal_
 from torch import nn
+import warnings
 
 from models.basic_layers import (EqualLinear, PixelNorm,
                                  SinusoidalPositionalEmbedding, Upsample)
@@ -383,11 +384,13 @@ class NATLayer(nn.Module):
         self.style_dim = style_dim
         
         self.norm1 = norm_layer(dim, style_dim)
-        if len(kernel_size) > 2 or len(dilation) > 2:
+        try:
             self.attn = HydraNeighborhoodAttention(dim, kernel_sizes=kernel_size,
                     num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
                     attn_drop=attn_drop, proj_drop=drop, dilations=dilation)
-        else:
+        except:
+            warnings.warn(f"Failed to make Hydra: attempting Legacy: "\
+                          f"kernel_size = {kernel_size} and dilation = {dilation}")
             if len(kernel_size) == 1 or type(kernel_size) == int:
                 if type(kernel_size) == list:
                     kernel_size = kernel_size[0]

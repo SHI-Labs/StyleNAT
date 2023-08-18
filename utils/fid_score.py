@@ -532,6 +532,7 @@ def calculate_fid_given_paths(paths, batch_size, device, dims, num_workers=32,N=
 
     model = InceptionV3([block_idx]).to(device)
 
+    # Samples
     print(f"Computing statistics of samples from path {paths[0]}")
     m1, s1 = compute_statistics_of_path(paths[0], model, batch_size,
                                         dims, device, num_workers)

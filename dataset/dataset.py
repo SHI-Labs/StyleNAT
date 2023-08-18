@@ -61,27 +61,22 @@ def unnormalize(image):
 def get_dataset(args, evaluation=True):
     normalize = T.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
-    transforms = [T.Resize((args.runs.size, args.runs.size))]
+    # Resize then center crop. Make sure data integrity is good
+    transforms = [T.Resize(args.runs.size),
+                  T.CenterCrop(args.runs.size),
+                  ]
     if args.runs.training.use_flip and not evaluation:
         transforms.append(T.RandomHorizontalFlip())
     transforms.append(T.ToTensor())
     transforms.append(normalize)
     transforms = T.Compose(transforms)
 
-    if args.dataset.lmdb:
+    if "lmdb" in args.dataset and args.dataset.lmdb:
         if get_rank() == 0:
             print(f"Using LMDB with {args.dataset.path}")
         dataset = MultiResolutionDataset(path=args.dataset.path,
                                          transform=transforms,
                                          resolution=args.runs.size)
-    elif args.dataset.name in ["church"]:
-        if args.dataset.name == "church":
-            classes = ['church_outdoor_train']
-        if get_rank() == 0:
-            print(f"Using LSUN {classes}")
-        dataset = datasets.LSUN(root=args.dataset.path,
-                                transform=transforms,
-                                classes=classes)
     elif args.dataset.name in ["cifar10"]:
         if get_rank() == 0:
             print(f"Loading CIFAR-10")
