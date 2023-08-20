@@ -1,12 +1,19 @@
 import time
+import os
+import string
+import random
+import warnings
 import torch
 from torch import nn, autograd, optim
 import torch.nn.functional as F
+from omegaconf import OmegaConf, open_dict
 
 from utils.distributed import get_rank, synchronize, get_world_size, reduce_loss_dict
 from utils.CRDiffAug import CR_DiffAug
 from dataset.dataset import get_dataset, get_loader
 from models.discriminator import Discriminator
+from src.evaluate import evaluate
+from src.analysis import visualize_attention
 
 try:
     import wandb
@@ -46,10 +53,20 @@ def g_nonsaturating_loss(fake_pred):
 
 
 def train(args, generator, g_ema, ckpt=None):
+    # Preprocessing checks and sets
+    if wandb:
+        wandb_dict = {}
+    save_dict, eval_dict = {}, {}
     dataset = get_dataset(args, evaluation=False)
+    if not hasattr(args, "rank"):
+        with open_dict(args):
+            args.rank = 0
+    if not hasattr(args, "world_size"):
+        with open_dict(args):
+            args.world_size = 1
     if get_rank() == 0:
         print(f"="*50)
-        print(f" Dataset: {args.dataset.name} ".center(50, "="))
+        print(f" Dataset: {args.dataset.name} ".center(49, "="))
         print(f"="*50)
     loader = get_loader(args=args,
                         dataset=dataset,
@@ -64,7 +81,11 @@ def train(args, generator, g_ema, ckpt=None):
         args.runs.discriminator.params = discriminator.num_params() / 1e6
     else:
         num_params = sum([m.numel() for m in discriminator.parameters()])
-        args.runs.discriminator.params = num_params / 1e6
+        if hasattr(args.runs.discriminator, "params"):
+            args.runs.discriminator.params = num_params / 1e6
+        else:
+            with open_dict(args):
+                args.runs.discriminator.params = num_params / 1e6
 
     accumulate(g_ema, generator, 0)
 
@@ -78,29 +99,50 @@ def train(args, generator, g_ema, ckpt=None):
         g_reg_ratio = 1
 
     # Load model checkpoint.
-    if args.restart.ckpt:
-        # Check starting iteration
-        try:
-            args.start_iter = int(os.path.splitext(ckpt_name)[0])
-            if get_rank() == 0:
-                print(f"Starting from {args.start_iter} iters")
-        except:
-            if get_rank() == 0:
-                print(f"Starting from 0 iters")
-
+    if ckpt is not None:
         # Load discriminator state dict
         try:
-            discriminator.load_state_dict(ckpt["d"])
+            if "state_dicts" in ckpt.keys():
+                discriminator.load_state_dict(ckpt["state_dicts"]["d"])
+            else: # Old
+                discriminator.load_state_dict(ckpt["d"])
         except:
             if get_rank() == 0:
                 print("We don't load the discriminator!")
 
     # Define all args above this point so we properly save to wandb
+    # Don't worry, other args will be logged with the checkpoints
     if get_rank() == 0 and wandb is not None and args.logging.wandb:
+        assert(hasattr(args, "wandb")),f"arg has ({args.keys()}) but not wandb?"
+        if hasattr(args.wandb, "tags"):
+            tags = args.wandb.tags
+            print(f"Using tags {tags}")
+        else:
+            tags = None
+        if hasattr(args.wandb, "description"):
+            description = args.wandb.description
+            print(f"Description".center(40,"="))
+            print("\t",description.replace('\n','\n\t'))
+            print(f"".center(40,"="))
+        else:
+            description = None
+        _resume = None
+        _id = None
+        if "restart" in args:
+            if"wandb_resume" in args.restart:
+                _resume = args.restart.wandb_resume
+            if "wandb_id" in args.restart:
+                _id = args.restart.wandb_id
         wandb.init(project=args.wandb.project_name,
                    entity=args.wandb.entity,
                    name=args.wandb.run_name,
-                   config=args,
+                   config=OmegaConf.to_container(args,
+                                                 resolve=True,
+                                                 throw_on_missing=True),
+                   resume=_resume,
+                   id=_id,
+                   notes=description,
+                   tags=tags,
                 )
 
     ## VERBOSE
@@ -120,6 +162,7 @@ def train(args, generator, g_ema, ckpt=None):
             device_ids=[args.local_rank],
             output_device=args.local_rank,
             broadcast_buffers=False,
+            find_unused_parameters=True, 
         )
 
         discriminator = nn.parallel.DistributedDataParallel(
@@ -142,12 +185,15 @@ def train(args, generator, g_ema, ckpt=None):
     )
 
     # Load optimizer checkpoint.
-    if args.restart.ckpt is not None:
+    if ckpt:
         if get_rank() == 0:
-            print("loading optimizer: ", args.restart.ckpt)
+            print("loading optimizer: ")#, args.restart.ckpt)
 
         try:
-            g_optim.load_state_dict(ckpt["g_optim"])
+            if "optim_dicts" in ckpt.keys():
+                g_optim.load_state_dict(ckpt["optim_dicts"]["g_optim"])
+            else: # Old
+                g_optim.load_state_dict(ckpt["g_optim"])
         except:
             if get_rank() == 0:
                 print(f"We didn't load the generator's optimizer!")
@@ -198,8 +244,12 @@ def train(args, generator, g_ema, ckpt=None):
                 - args.runs.training.lr_decay_start_steps)
 
     # Training loop
-    for idx in range(args.runs.training.iter):
-        i = idx + args.restart.start_iter
+    start = 0
+    if ckpt and "start_iter" in args.restart:
+        start += args.restart.start_iter
+        if get_rank() == 0:
+            print(f"=====> Found checkpoint and starting at {start} iters")
+    for i in range(start,args.runs.training.iter):
         if i > args.runs.training.iter:
             if get_rank() == 0:
                 print("Done!")
@@ -207,7 +257,7 @@ def train(args, generator, g_ema, ckpt=None):
 
         # Train D
         generator.train()
-        if not args.dataset.lmdb:
+        if "lmdb" not in args.dataset or not args.dataset.lmdb:
             this_data = next(loader)
             real_img = this_data[0]
         else:
@@ -264,7 +314,7 @@ def train(args, generator, g_ema, ckpt=None):
         generator.requires_grad = True
         discriminator.requires_grad = False
 
-        if not args.dataset.lmdb:
+        if "lmdb" not in args.dataset or not args.dataset.lmdb:
             this_data = next(loader)
             real_img = this_data[0]
         else:
@@ -303,14 +353,20 @@ def train(args, generator, g_ema, ckpt=None):
 
         # Log, save, and evaluate
         if get_rank() == 0:
+            args.world_size = get_world_size()
+            args.rank = get_rank()
+            imgs_processed = i * args.runs.training.batch * get_world_size()
             if i % args.logging.print_freq == 0:
-                vis_loss = {
+                if wandb and args.logging.wandb:
+                    wandb_dict.update({
                     'd_loss': d_loss_val,
                     'g_loss': g_loss_val,
                     'r1_val': r1_val,
-                    }
-                if wandb and args.logging.wandb:
-                    wandb.log(vis_loss, step=i)
+                    'iter': i,
+                    'imgs_processed': imgs_processed,
+                    "G_lr": args.runs.generator.lr,
+                    "D_lr": args.runs.discriminator.lr,
+                    })
                 iters_time = time.time() - end
                 end = time.time()
                 if args.runs.training.lr_decay:
@@ -327,45 +383,119 @@ def train(args, generator, g_ema, ckpt=None):
                           f"\tD_loss: {d_loss_val:.4f}"\
                           f"\tG_loss: {g_loss_val:.4f}"\
                           f"\tR1: {r1_val:.4f}")
+            if i % args.logging.save_freq == 0 and i != 0:
+                state_dicts = {"g": g_module.state_dict(),
+                               "d": d_module.state_dict(),
+                               "g_ema": g_ema.state_dict(),
+                              }
+                optim_dicts = {"g_optim": g_optim.state_dict(),
+                               "d_optim": d_optim.state_dict(),
+                              }
+                # LR should populate via optim, this is purposeful redundancy
+                lr_dicts = {"G_lr": args.runs.generator.lr,
+                            "D_lr": args.runs.discriminator.lr,
+                           }
+                # Convert args back to normal dict to make exploring checkpoint
+                # easier
+                save_dict.update({
+                        "args": OmegaConf.to_container(args, resolve=True),
+                        "state_dicts": state_dicts,
+                        "optim_dicts": optim_dicts,
+                        "lr_dicts": lr_dicts,
+                    })
 
             if i != 0 and i % args.logging.eval_freq == 0:
-                print(f"Saving model at: "\
-                      f"{args.logging.checkpoint_path}/{str(i).zfill(6)}.pt")
-                torch.save(
-                    {
-                        "g": g_module.state_dict(),
-                        "d": d_module.state_dict(),
-                        "g_ema": g_ema.state_dict(),
-                        "g_optim": g_optim.state_dict(),
-                        "d_optim": d_optim.state_dict(),
-                        "args": args,
-                    },
-                    args.logging.checkpoint_path + f"/{str(i).zfill(6)}.pt",
-                )
-
                 # Evaluate with EMA and log the FID score
                 print("===> Evaluation <===")
                 g_ema.eval()
-                fid = evaluation(g_ema, args, i * args.runs.training.batch * int(os.environ["WORLD_SIZE"]))
-                steps = i * args.runs.training.batch * int(os.environ["WORLD_SIZE"])
-                print(f"FID Score : {fid:.2f}, {steps/1000000:.1f}M images processed")
-                fid_dict = {'fid': fid}
+                # quick save since fid and analysis is most likely point for 
+                # crash  We'll overwrite this checkpoint but want to provide 
+                # robustness here to avoid unnecessary compute
+                if args.logging.checkpoint_path[0] != "/":
+                    ckpt_path = args.save_root + args.logging.checkpoint_path
+                else:
+                    ckpt_path = args.logging.checkpoint_path
+                save_name = f"{ckpt_path}/{str(i).zfill(6)}"
+                # Don't overwrite existing checkpoint!
+                if os.path.exists(f"{save_name}.pt"):
+                    _hash = "".join(random.choices(
+                        string.ascii_uppercase + string.ascii_lowercase \
+                        + string.digits, k=4))
+                    _save_name = f"{save_name}_{_hash}"
+                    while os.path.exists(f"{_save_name}.pt"):
+                        _hash = "".join(random.choices(
+                            string.ascii_uppercase + string.ascii_lowercase \
+                            + string.digits, k=4))
+                        _save_name = f"{save_name}_{_hash}"
+                    save_name = _save_name
+                    warnings.warn(f"\n==========> WARNING <==========\n"\
+                            f"\tWe found an existing checkpoint so the "\
+                            f"current run is saved as {save_name}" \
+                            f".pt to avoid loss of data.\n"\
+                            f"Please check, you may have multiple backups!\n"
+                            f"===============================\n")
+                torch.save(save_dict, f"{save_name}.pt")
+                fid = evaluate(args,
+                               generator=g_ema,
+                               steps=None if args.logging.reuse_samplepath else imgs_processed,
+                               log_first_batch=args.logging.log_img_batch,
+                               )
+                # Save evaluations between each saved checkpoint, but record
+                # when that was
+                eval_dict.update({f"fid @ {imgs_processed/1e6:.2f}M imgs": fid,
+                                  f"{imgs_processed/1e6:.2f}M imgs is": \
+                                        f"{i} * {args.runs.training.batch} "\
+                                        f"* {get_world_size()}",
+                                 })
+                print("="*50)
+                print(f"> FID Score : {fid:.2f}, {imgs_processed/1000000:.2f}M "\
+                      f"imgs seen <".center(48, '='))
+                print("="*50)
                 if wandb and args.logging.wandb:
-                    wandb.log({'fid': fid,
-                               'iter': i})
+                    wandb_dict.update({'fid': fid})
+                    # If we aren't in our print frequency, just push to wandb 
+                    # now. Only happens if eval % print != 0
+                    if args.logging.print_freq != 0:
+                        wandb.log(wandb_dict, step=i)
+                        wandb_dict = {}
 
-            if i % args.logging.save_freq == 0:
-                torch.save(
-                    {
-                        "g": g_module.state_dict(),
-                        "d": d_module.state_dict(),
-                        "g_ema": g_ema.state_dict(),
-                        "g_optim": g_optim.state_dict(),
-                        "d_optim": d_optim.state_dict(),
-                        "args": args,
-                        "G_lr": args.runs.generator.lr,
-                        "D_lr": args.runs.discriminator.lr,
-                    },
-                    args.logging.checkpoint_path + f"/{str(i).zfill(6)}.pt",
-                )
+                # Log information to our checkpoint
+                if hasattr(args.logging, "fid"):
+                    args.logging.fid = float(fid)
+                else:
+                    with open_dict(args):
+                        args.logging.fid = float(fid)
+                if hasattr(args.logging, "current_iteration"):
+                    args.logging.current_iteration= int(i)
+                else:
+                    with open_dict(args):
+                        args.logging.current_iteration= int(i)
+                if hasattr(args.logging, "nimages"):
+                    args.logging.nimages= int(imgs_processed)
+                else:
+                    with open_dict(args):
+                        args.logging.nimages=int(imgs_processed)
+
+                if args.evaluation.attn_map:
+                    visualize_attention(args, g_ema,
+                                        save_maps=args.evaluation.save_attn_map,
+                                        log_wandb=args.logging.wandb,
+                                        )
+
+            if i % args.logging.save_freq == 0 and i != 0:
+                # Convert args back to normal dict to make exploring checkpoint
+                # easier
+                save_dict.update({
+                        "args": OmegaConf.to_container(args, resolve=True),
+                        "eval_info": eval_dict,
+                    })
+                torch.save(save_dict, f"{save_name}.pt")
+                # Clear save_dict and eval_dict after save
+                save_dict, eval_dict = {}, {}
+            if wandb_dict != {}:
+                wandb.log(wandb_dict,
+                          commit=True,
+                          step=i)
+                # Clear wandb_dict after save
+                wandb_dict = {}
         torch.cuda.synchronize()

@@ -1,0 +1,18 @@
+type: attention_map
+device: cuda
+distributed: False
+save_root: my/storage/path/
+
+defaults:
+    - _self_
+    - runs: ffhq_256
+
+restart:
+    ckpt: FFHQ256_940k_flip.pt
+
+evaluation:
+    attn_map: True
+    save_attn_map: True
+    attn_map_path: remove/if/want/save_root/as/dir
+    const_attn_seed: True
+

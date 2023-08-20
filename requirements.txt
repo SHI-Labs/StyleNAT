@@ -12,3 +12,4 @@ joblib
 dill
 imageio-ffmpeg
 ftfy
+matplotlib
