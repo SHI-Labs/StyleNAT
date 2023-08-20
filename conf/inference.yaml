@@ -1,0 +1,15 @@
+type: inference
+device: cuda
+distributed: False
+save_root: storage/
+
+defaults:
+    - _self_
+    - runs: ffhq_256
+
+restart:
+    ckpt: FFHQ256_940k_flip.pt
+
+inference:
+    seeds: range(0,20)
+    save_path: tmp

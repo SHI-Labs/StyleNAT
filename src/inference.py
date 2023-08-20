@@ -5,8 +5,7 @@ import torch
 from torchvision import transforms as T
 from torchvision.utils import make_grid, save_image
 
-#from dataset.dataset import unnormalize
-import dataset.dataset as D
+from dataset.dataset import unnormalize
 
 toPIL = T.ToPILImage()
 toTensor = T.ToTensor()
@@ -61,23 +60,27 @@ def extract_range(args):
 
 @torch.no_grad()
 def inference(args, generator):
-    dataset = D.get_dataset(args, evaluation=True)
-    assert(os.path.exists(args.inference.save_path)),f"Save path "\
-            f"{args.inference.save_path} does not exist"
-    assert('num_imgs' in args.inference or 'seeds' in args.inference),\
+    save_path = args.inference.save_path
+    if save_path[0] != "/":
+        save_path = args.save_root + save_path
+    assert(os.path.exists(save_path)),f"Save path "\
+            f"{save_path} does not exist"
+    assert('num_images' in args.inference or 'seeds' in args.inference),\
             f"Inference must either specify a number of images "\
             f"(random seed generation) or a set of seeds to use to generate."
     if 'num_images' in args.inference:
         num_imgs = args.inference.num_images
-    if args.inference.seeds is not None:
-        num_imgs = len(args.inference.seeds)
-    # Handles "range(start, end)" input from hydra file 
-    if "range" in args.inference.seeds:
-        extract_range(args)
-        num_imgs = len(args.inference.seeds)
+    if "seeds" in args.inference and args.inference.seeds is not None: 
+        # Handles "range(start, end)" input from hydra file 
+        if "range" in args.inference.seeds:
+            extract_range(args)
+            num_imgs = len(args.inference.seeds)
+        else:
+            num_imgs = len(args.inference.seeds)
 
     for i in range(num_imgs):
-        if args.inference.seeds is not None and i < len(args.inference.seeds):
+        if "seeds" in args.inference and args.inference.seeds is not None and \
+                i < len(args.inference.seeds):
             seed = args.inference.seeds[i]
             torch.random.manual_seed(seed)
         else:
@@ -86,8 +89,8 @@ def inference(args, generator):
 
         noise = torch.randn((args.inference.batch,
                              args.runs.generator.style_dim)).to(args.device)
-        sample, latent = generator(noise)#, truncation=args.truncation)
-        sample = D.unnormalize(sample)
+        sample, latent = generator(noise)
+        sample = unnormalize(sample)
         sample = add_watermark(sample, im_size=args.runs.size)
-        save_image(sample, f"{args.inference.save_path}/{seed}.png",
+        save_image(sample, f"{save_path}/{seed}.png",
                    nrow=1, padding=0, normalize=True, value_range=(0,1))

@@ -1,4 +1,8 @@
 import time
+import os
+import string
+import random
+import warnings
 import torch
 from torch import nn, autograd, optim
 import torch.nn.functional as F
@@ -158,6 +162,7 @@ def train(args, generator, g_ema, ckpt=None):
             device_ids=[args.local_rank],
             output_device=args.local_rank,
             broadcast_buffers=False,
+            find_unused_parameters=True, 
         )
 
         discriminator = nn.parallel.DistributedDataParallel(
@@ -242,6 +247,8 @@ def train(args, generator, g_ema, ckpt=None):
     start = 0
     if ckpt and "start_iter" in args.restart:
         start += args.restart.start_iter
+        if get_rank() == 0:
+            print(f"=====> Found checkpoint and starting at {start} iters")
     for i in range(start,args.runs.training.iter):
         if i > args.runs.training.iter:
             if get_rank() == 0:
@@ -376,57 +383,6 @@ def train(args, generator, g_ema, ckpt=None):
                           f"\tD_loss: {d_loss_val:.4f}"\
                           f"\tG_loss: {g_loss_val:.4f}"\
                           f"\tR1: {r1_val:.4f}")
-
-            if i != 0 and i % args.logging.eval_freq == 0:
-                # Evaluate with EMA and log the FID score
-                print("===> Evaluation <===")
-                g_ema.eval()
-                #fid = evaluate(g_ema, args, i * args.runs.training.batch * int(os.environ["WORLD_SIZE"]))
-                fid = evaluate(args,
-                               generator=g_ema,
-                               steps=None if args.logging.reuse_samplepath else imgs_processed,
-                               log_first_batch=args.logging.log_img_batch,
-                               )
-                # Save evaluations between each saved checkpoint, but record
-                # when that was
-                eval_dict.update({f"fid @ {imgs_processed/1e6:.2f}M imgs": fid,
-                                  f"{imgs_processed/1e6:.2f}M imgs is": \
-                                        f"{i} * {args.runs.training.batch} "\
-                                        f"* {get_world_size()}",
-                                 })
-                print("="*50)
-                print(f"> FID Score : {fid:.2f}, {imgs_processed/1000000:.2f}M "\
-                      f"imgs seen <".center(48, '='))
-                print("="*50)
-                if wandb and args.logging.wandb:
-                    wandb_dict = {'fid': fid}
-                    if i % args.logging.eval_freq != 0:
-                        wandb_dict.update({'iter': i,
-                                           'imgs_processed': imgs_processed,
-                                           })
-
-                if hasattr(args.logging, "fid"):
-                    args.logging.fid = float(fid)
-                else:
-                    with open_dict(args):
-                        args.logging.fid = float(fid)
-                if hasattr(args.logging, "current_iteration"):
-                    args.logging.current_iteration= int(i)
-                else:
-                    with open_dict(args):
-                        args.logging.current_iteration= int(i)
-                if hasattr(args.logging, "nimages"):
-                    args.logging.nimages= int(imgs_processed)
-                else:
-                    with open_dict(args):
-                        args.logging.nimages=int(imgs_processed)
-
-                if args.evaluation.attn_map:
-                    visualize_attention(args, g_ema,
-                                        save_image=args.evaluation.save_attn_map,
-                                        log_wandb=args.logging.wandb,
-                                        )
-
             if i % args.logging.save_freq == 0 and i != 0:
                 state_dicts = {"g": g_module.state_dict(),
                                "d": d_module.state_dict(),
@@ -446,15 +402,94 @@ def train(args, generator, g_ema, ckpt=None):
                         "state_dicts": state_dicts,
                         "optim_dicts": optim_dicts,
                         "lr_dicts": lr_dicts,
-                        "eval_info": eval_dict,
                     })
+
+            if i != 0 and i % args.logging.eval_freq == 0:
+                # Evaluate with EMA and log the FID score
+                print("===> Evaluation <===")
+                g_ema.eval()
+                # quick save since fid and analysis is most likely point for 
+                # crash  We'll overwrite this checkpoint but want to provide 
+                # robustness here to avoid unnecessary compute
                 if args.logging.checkpoint_path[0] != "/":
-                    ckpt_path = args.save_path + args.logging.checkpoint_path
+                    ckpt_path = args.save_root + args.logging.checkpoint_path
                 else:
                     ckpt_path = args.logging.checkpoint_path
-                torch.save(save_dict,
-                    ckpt_path + f"/{str(i).zfill(6)}.pt",
-                )
+                save_name = f"{ckpt_path}/{str(i).zfill(6)}"
+                # Don't overwrite existing checkpoint!
+                if os.path.exists(f"{save_name}.pt"):
+                    _hash = "".join(random.choices(
+                        string.ascii_uppercase + string.ascii_lowercase \
+                        + string.digits, k=4))
+                    _save_name = f"{save_name}_{_hash}"
+                    while os.path.exists(f"{_save_name}.pt"):
+                        _hash = "".join(random.choices(
+                            string.ascii_uppercase + string.ascii_lowercase \
+                            + string.digits, k=4))
+                        _save_name = f"{save_name}_{_hash}"
+                    save_name = _save_name
+                    warnings.warn(f"\n==========> WARNING <==========\n"\
+                            f"\tWe found an existing checkpoint so the "\
+                            f"current run is saved as {save_name}" \
+                            f".pt to avoid loss of data.\n"\
+                            f"Please check, you may have multiple backups!\n"
+                            f"===============================\n")
+                torch.save(save_dict, f"{save_name}.pt")
+                fid = evaluate(args,
+                               generator=g_ema,
+                               steps=None if args.logging.reuse_samplepath else imgs_processed,
+                               log_first_batch=args.logging.log_img_batch,
+                               )
+                # Save evaluations between each saved checkpoint, but record
+                # when that was
+                eval_dict.update({f"fid @ {imgs_processed/1e6:.2f}M imgs": fid,
+                                  f"{imgs_processed/1e6:.2f}M imgs is": \
+                                        f"{i} * {args.runs.training.batch} "\
+                                        f"* {get_world_size()}",
+                                 })
+                print("="*50)
+                print(f"> FID Score : {fid:.2f}, {imgs_processed/1000000:.2f}M "\
+                      f"imgs seen <".center(48, '='))
+                print("="*50)
+                if wandb and args.logging.wandb:
+                    wandb_dict.update({'fid': fid})
+                    # If we aren't in our print frequency, just push to wandb 
+                    # now. Only happens if eval % print != 0
+                    if args.logging.print_freq != 0:
+                        wandb.log(wandb_dict, step=i)
+                        wandb_dict = {}
+
+                # Log information to our checkpoint
+                if hasattr(args.logging, "fid"):
+                    args.logging.fid = float(fid)
+                else:
+                    with open_dict(args):
+                        args.logging.fid = float(fid)
+                if hasattr(args.logging, "current_iteration"):
+                    args.logging.current_iteration= int(i)
+                else:
+                    with open_dict(args):
+                        args.logging.current_iteration= int(i)
+                if hasattr(args.logging, "nimages"):
+                    args.logging.nimages= int(imgs_processed)
+                else:
+                    with open_dict(args):
+                        args.logging.nimages=int(imgs_processed)
+
+                if args.evaluation.attn_map:
+                    visualize_attention(args, g_ema,
+                                        save_maps=args.evaluation.save_attn_map,
+                                        log_wandb=args.logging.wandb,
+                                        )
+
+            if i % args.logging.save_freq == 0 and i != 0:
+                # Convert args back to normal dict to make exploring checkpoint
+                # easier
+                save_dict.update({
+                        "args": OmegaConf.to_container(args, resolve=True),
+                        "eval_info": eval_dict,
+                    })
+                torch.save(save_dict, f"{save_name}.pt")
                 # Clear save_dict and eval_dict after save
                 save_dict, eval_dict = {}, {}
             if wandb_dict != {}:

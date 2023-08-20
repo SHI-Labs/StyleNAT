@@ -15,7 +15,7 @@ from utils.distributed import get_rank
 @torch.no_grad()
 def save_images_batched(args, generator, steps=None, log_first_batch=True):
     if args.logging.sample_path[0] != "/":
-        path = args.save_path + args.logging.sample_path
+        path = args.save_root + args.logging.sample_path
     else:
         path = args.logging.sample_path
     if steps is not None:
@@ -46,7 +46,7 @@ def save_images_batched(args, generator, steps=None, log_first_batch=True):
 @torch.no_grad()
 def clear_directory(args):
     if args.logging.sample_path[0] != "/":
-        path = args.save_path + args.logging.sample_path
+        path = args.save_root + args.logging.sample_path
     else:
         path = args.logging.sample_path
     _files = os.listdir(path)
@@ -67,10 +67,10 @@ def evaluate(args,
     #print(f" Parameters ".center(40, "-"))
     print(f"> Generator has:".ljust(19),f"{args.runs.generator.params:.4f} M Parameters")
     if not hasattr(args.logging, "sample_path"):
-        path = args.save_path
+        path = args.save_root
     else:
         if args.logging.sample_path[0] != "/":
-            path = args.save_path+ args.logging.sample_path
+            path = args.save_root+ args.logging.sample_path
         else:
             path = args.logging.sample_path
     assert(type(path) == str),f"Path needs to be a string not {type(path)}"

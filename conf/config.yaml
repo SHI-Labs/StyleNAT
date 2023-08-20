@@ -1,12 +1,12 @@
-type: evaluate
+type: train
 device: cuda
 latent: 4096
 world_size: 1
 rank: 0
 local_rank: 0
-distributed: 0
-truncation: 1
+distributed: True
 workers: 0
+save_root: used/for/checkpoints/and/sample/paths
 
 defaults:
     - _self_
@@ -15,40 +15,28 @@ defaults:
 dataset:
     name: ffhq
     path: /data/datasets/ffhq_256
-    lmdb: null
 
 logging:
     wandb: False
+    log_img_batch: False
     print_freq: 1000
     eval_freq: 50000
     save_freq: 25000
-    checkpoint_path: /tmp
-    lmdb: False
-    sample_path: /tmp
+    checkpoint_path: relative/from/save_path
+    sample_path: relative/from/save_path
+    reuse_samplepath: True
 
 evaluation:
     gt_path: /data/datasets/ffhq_256/images/
     num_batches: 12500
     total_size: 50000
     batch: 4
-    save_path: evaluations/
-
-inference:
-    num_images: 100
-    seeds: [10,13,32,45,60,87,92,96]
-    save_path: sample_images/
-    batch: 1
-
-restart:
-    ckpt: null
-    start_iter: 0
-    auto_resume: False
-
-misc:
-    seed: null
-    rng_state: null
+    attn_map: True
+    save_attn_map: False
+    attn_map_path: attn_maps
+    const_attn_seed: True
 
 wandb:
-    project_name: stylenat
-    entity: wandteam
+    project_name: my_stylenat
+    entity: my_wand_team
     run_name: ffhq_256_reproduce

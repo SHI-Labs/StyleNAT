@@ -31,3 +31,9 @@ Remove an argument
 ~nested/arg
 ~nested/arg=value
 ```
+
+Use a different base config file
+```
+python main.py --config-name attn_map
+python main.py -cn inference
+```

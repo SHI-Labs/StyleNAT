@@ -2,6 +2,7 @@ import os
 import numpy as np
 import math
 import random
+import logging
 from omegaconf import open_dict
 import torch
 from torchvision.utils import make_grid, save_image
@@ -57,8 +58,8 @@ def attn_wrapper(attn_object,
         attention = [a.softmax(dim=-1) for a in attention]
         ############################
         #attn_object.attn_map = attention
-        #print(type(q), len(q))
-        #print([q_.shape for q_ in q])
+        logging.debug(f"NA fwd hook: q is type {type(q)}, and length {len(q)}")
+        logging.debug(f"NA fwd hook: q shape is {[_q.shape for _q in q]}")
         qq = torch.cat(q, dim=1)
         kk = torch.cat(k, dim=1)
         qq = qq.mean([2,3]).unsqueeze(2)
@@ -76,6 +77,7 @@ def attn_wrapper(attn_object,
         x = torch.cat(x, dim=1)
         x = x.permute(0, 2, 3, 1, 4).reshape(B, H, W, C)
         return attn_object.proj_drop(attn_object.proj(x))
+
     def na_legacy_fwd_hook(x):
         B, Hp, Wp, C = x.shape
         H, W = Hp, Wp
@@ -105,22 +107,14 @@ def attn_wrapper(attn_object,
         qq = q.mean([2, 3]).unsqueeze(2)
         kk = k.flatten(2, 3).transpose(-2, -1)
         aa = qq @ kk
-        #aa = aa.softmax(-1)
         aa = aa.reshape(B, attn_object.num_heads, H, W)
         attn_object.attn_map = aa
-        #print(qq.shape, kk.shape, aa.shape)
+        logging.debug(f"NA legacy fwd hook: q,k,a shapes "\
+                f"{qq.shape}, {kk.shape}, {aa.shape}")
         ############################
 
         x1 = natten2dav(attn1_, v1, attn_object.dilation_1)
-#        print(f"nheads {attn_object.num_heads}")
-#        print(f"x is {x.shape}")
-#        print(f"q is {q0.shape} {q1.shape}")
-#        print(f"k is {k0.shape} {k1.shape}")
-#        print(f"attn is {attn0.shape} {attn1.shape}")
-#        print(f"x0 is {x0.shape}")
-#        print(f"x1 is {x1.shape}")
-#        print()
-#
+
         x = torch.cat([x0, x1],dim=1)
 
         x = x.permute(0, 2, 3, 1, 4).reshape(B, H, W, C)
@@ -152,15 +146,12 @@ def attn_wrapper(attn_object,
 
         ############################
         # B_, num_heads, N, N
-        #attn_object.attn_map = attn
         attn_object.q = q#.mean([2,3]).unsqueeze(2)
         attn_object.k = k
         ############################
-        #print(attn.shape)
-        #print(f"dim: {attn_object.dim}")
-        #print(f"num_heads: {attn_object.num_heads}")
-        #print(f"window_sizes: {attn_object.window_size}")
-        #print(f"head dimension: {attn_object.head_dim}")
+        logging.debug(f"Swin attn hook: num_heads: {attn_object.num_heads}")
+        logging.debug(f"Swin attn hook: window sizes {attn_object.window_size}")
+        logging.debug(f"Swin attn hook: head dim {attn_object.head_dim}")
         attn = attn_object.attn_drop(attn)
         x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
         
@@ -235,30 +226,35 @@ def visualize_attention(args, generator,
                         name="attn",        # Name prefix for attn map names
                         num_attentions=-1,  # -1 visualizes all
                         cmap='viridis',
-                        save_image=True,
+                        save_maps=True,
                         log_wandb=False,
                         commit_wandb=False,
                         ):
-    #path = args.analysis.save_path
-    if save_image:
-        path = args.evaluation.attn_map_path
+    if save_maps:
+        if "attn_map_path" not in args.evaluation:
+            path = args.save_root
+        elif args.evaluation.attn_map_path[0] == "/":
+            path = args.evaluation.attn_map_path
+        else:
+            path = args.save_root + args.evaluation.attn_map_path
         if not os.path.exists(path):
             print(f"Path {path} does not exist... making")
             os.mkdir(path)
     # Change generator to have correct hooks
     for i,layer in enumerate(generator.layers):
+        logging.debug(f"Layer name {layer.__class__.__name__}")
         for j,block in enumerate(layer.blocks):
             name = block.attn.__class__.__name__
-            #print(f"Name {name} in layer {layer}")
-            #if name == "StyleSwinTransformerBlock":
-            #### SWIN
+            logging.debug(f"Block name {name}")
+            #### SWIN will have module list name
             if name == "ModuleList":
                 name = block.attn[0].__class__.__name__
-                #print(f"Name: {name} and block {block}")
-                generator.layers[i].blocks[j].attn[0].forward = attn_wrapper(generator.layers[i].blocks[j].attn[0], name)
-                generator.layers[i].blocks[j].attn[1].forward = attn_wrapper(generator.layers[i].blocks[j].attn[1], name)
-            # NA
+                logging.debug(f"Swin block name {name}")
+                for k in len(generator.layers[i].blocks[j].attn):
+                    generator.layers[i].blocks[j].attn[k].forward = attn_wrapper(generator.layers[i].blocks[j].attn[k], name)
+            # NA or Hydra-NA
             else:
+                logging.debug(f"NA block named {block.attn.__class__.__name__}")
                 generator.layers[i].blocks[j].attn.forward = attn_wrapper(generator.layers[i].blocks[j].attn, name)
 
     # Allow us to produce a noise with a constant seed. We can manually set it
@@ -283,7 +279,7 @@ def visualize_attention(args, generator,
             args.evaluation.const_attn_seed is not False:
             torch.set_rng_state(_torch_rng_state)
             random.setstate(_py_rng_state)
-    if save_image:
+    if save_maps:
         save_image(make_grid(sample), f"{path}/original.png")
     if log_wandb:
         wandb.log({'attn_map_original': wandb.Image(make_grid(sample))},
@@ -296,7 +292,7 @@ def visualize_attention(args, generator,
         if i > 1: # only process above nxn
             for j,block in enumerate(layer.blocks):
                 name = block.__class__.__name__
-                #print(f"Image Size: {img_sizes[i]} :: name {name}")
+                logging.debug(f"Image Size: {img_sizes[i]} :: name {name}")
                 if name == "StyleSwinTransformerBlock":
                     name == "WindowAttention"
                     #window_size = 2**(i+2)
@@ -305,21 +301,25 @@ def visualize_attention(args, generator,
                     k0 = generator.layers[i].blocks[j].attn[0].k
                     k1 = generator.layers[i].blocks[j].attn[1].k
                     attn_map = unswin_window(q0, q1, k0, k1, img_sizes[i], window_sizes[i], nheads_list[i])
-                    #print(f"{torch.std_mean(attn_map)}, {attn_map.min()}, {attn_map.max()}\n")
+                    logging.debug(f"Mean, [min, max] = "\
+                            f"{torch.std_mean(attn_map)}, "\
+                            f"[{attn_map.min()}, {attn_map.max()}]\n")
                     _dict[f"{name}_{i}{j}"] = attn_map#.softmax(dim=0)
                 else:
                     attn_map = generator.layers[i].blocks[j].attn.attn_map#.mean(dim=-1)
                     attn_map /= 2
-                    #print(f"{torch.std_mean(attn_map)} :: [{attn_map.min()}, {attn_map.max()}]\n")
+                    logging.debug(f"Mean, [min, max] = "\
+                            f"{torch.std_mean(attn_map)} "\
+                            f"[{attn_map.min()}, {attn_map.max()}]\n")
                     attn_map = attn_map.squeeze(0)#.softmax(dim=1)
                     # kernel density channel
                     _dict[f"{name}_{i}{j}"] = attn_map
-                    #print(f"Got attn_map with shape {attn_map.shape}")
+                    logging.debug(f"Got attn_map with shape {attn_map.shape}")
     # If you want to change the color map play with this
     #_cm = get_cmap(cmap)
     last_key = list(_dict.keys())[-1]
     for k,v in _dict.items():
-        #print(f"v: {torch.std_mean(v)} == [{v.min()}, {v.max()}")
+        logging.debug(f"v: {torch.std_mean(v)} == [{v.min()}, {v.max()}")
         if len(v.shape) == 2:
             nrow = 1
             v = v.unsqueeze(0)
@@ -331,12 +331,13 @@ def visualize_attention(args, generator,
             v = v.unsqueeze(1)
         else:
             raise ValueError(f"Got incorrect shape of {v.shape}")
-        #print(f"Key {k} with shape {v.shape} :: {nrow}rows:{v.shape[0]%nrow}")
+        logging.debug(f"Key {k} with shape {v.shape} :: {nrow}rows:{v.shape[0]%nrow}")
         grid = make_grid(v, nrow=nrow)
-        if save_image:
+        logging.debug(f"Grid shape {grid.shape}")
+        if save_maps:
             save_image(grid, f"{path}/{k}.png")
         if log_wandb:
             wandb.log({f"Attn_Map_{k}": wandb.Image(grid)}, commit=False)
 
-    if save_image:
+    if save_maps:
         print(f"Attention Maps saved to {path}")

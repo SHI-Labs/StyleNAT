@@ -375,7 +375,7 @@ class NATLayer(nn.Module):
     def __init__(self, dim, input_resolution, num_heads, kernel_size=7,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
                  act_layer=nn.GELU, norm_layer=AdaptiveInstanceNorm,
-                 layer_scale=None, style_dim=512, dilation=None):
+                 layer_scale=None, style_dim=512, dilation=None, legacy=False):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -384,11 +384,7 @@ class NATLayer(nn.Module):
         self.style_dim = style_dim
         
         self.norm1 = norm_layer(dim, style_dim)
-        try:
-            self.attn = HydraNeighborhoodAttention(dim, kernel_sizes=kernel_size,
-                    num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                    attn_drop=attn_drop, proj_drop=drop, dilations=dilation)
-        except:
+        if legacy:
             warnings.warn(f"Failed to make Hydra: attempting Legacy: "\
                           f"kernel_size = {kernel_size} and dilation = {dilation}")
             if len(kernel_size) == 1 or type(kernel_size) == int:
@@ -405,6 +401,10 @@ class NATLayer(nn.Module):
                         attn_drop=attn_drop, proj_drop=drop,
                         dilation_0=1 if dilation is None else dilation[0],
                         dilation_1=1 if dilation is None else dilation[1])
+        else:
+            self.attn = HydraNeighborhoodAttention(dim, kernel_sizes=kernel_size,
+                    num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                    attn_drop=attn_drop, proj_drop=drop, dilations=dilation)
 
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim, style_dim)
@@ -442,7 +442,7 @@ class MHSARPBLayer(nn.Module):
     def __init__(self, dim, input_resolution, num_heads, kernel_size=None,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
                  act_layer=nn.GELU, norm_layer=AdaptiveInstanceNorm,
-                 layer_scale=None, style_dim=512, dilation=None):
+                 layer_scale=None, style_dim=512, dilation=None, legacy=None):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -572,7 +572,7 @@ class StyleBasicLayer(nn.Module):
     def __init__(self, dim, input_resolution, depth, num_heads, window_size, out_dim=None,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., upsample=None, 
                  use_checkpoint=False, style_dim=512, block_type="transformer",
-                 kernel_size=None, dilation=None):
+                 kernel_size=None, dilation=None, legacy=False):
 
         super().__init__()
         #print(f"Input resolution {input_resolution} and block type {block_type}")
@@ -600,7 +600,7 @@ class StyleBasicLayer(nn.Module):
                         num_heads=num_heads, kernel_size=kernel_size, mlp_ratio=mlp_ratio,
                         qkv_bias=qkv_bias, qk_scale=qk_scale, drop=drop,
                         attn_drop=attn_drop, style_dim=style_dim,
-                        dilation=dilation)
+                        dilation=dilation, legacy=legacy)
             for i in range(depth)])
 
         elif block_type.lower() == "swin":
@@ -718,6 +718,7 @@ class Generator(nn.Module):
         self,
         args,
         size,
+        legacy=False,
     ):
         super().__init__()
         self.size = size
@@ -790,6 +791,7 @@ class Generator(nn.Module):
                                block_type=self.block_type,
                                kernel_size=list(self.kernels[i_layer-start]),
                                dilation=list(self.dilations[i_layer-start]),
+                               legacy=legacy
                                )
             self.layers.append(layer)
 
