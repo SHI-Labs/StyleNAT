@@ -1,3 +1,4 @@
+from rich import print
 import time
 import os
 import string
@@ -343,19 +344,42 @@ def train(args, generator, g_ema, ckpt=None):
 
         if args.runs.training.lr_decay \
                 and i > args.runs.training.lr_decay_start_steps:
-            args.G_lr -= lr_decay_per_step
-            args.D_lr = args.G_lr * 4 if args.ttur else (args.D_lr - lr_decay_per_step)
+            args.runs.generator.lr -= lr_decay_per_step
+            args.runs.discriminator.lr = args.runs.generator.lr * 4 if args.runs.training.ttur else (args.runs.discriminator.lr - lr_decay_per_step)
 
             for param_group in d_optim.param_groups:
-                param_group['lr'] = args.runs.training.discriminator.lr
+                param_group['lr'] = args.runs.discriminator.lr
             for param_group in g_optim.param_groups:
-                param_group['lr'] = args.runs.training.generator.lr
+                param_group['lr'] = args.runs.generator.lr
 
         # Log, save, and evaluate
         if get_rank() == 0:
             args.world_size = get_world_size()
             args.rank = get_rank()
             imgs_processed = i * args.runs.training.batch * get_world_size()
+            if args.logging.checkpoint_path[0] != "/":
+                ckpt_path = args.save_root + args.logging.checkpoint_path
+            else:
+                ckpt_path = args.logging.checkpoint_path
+            save_name = f"{ckpt_path}/{str(i).zfill(6)}"
+            # Don't overwrite existing checkpoint!
+            if os.path.exists(f"{save_name}.pt"):
+                _hash = "".join(random.choices(
+                    string.ascii_uppercase + string.ascii_lowercase \
+                    + string.digits, k=4))
+                _save_name = f"{save_name}_{_hash}"
+                while os.path.exists(f"{_save_name}.pt"):
+                    _hash = "".join(random.choices(
+                        string.ascii_uppercase + string.ascii_lowercase \
+                        + string.digits, k=4))
+                    _save_name = f"{save_name}_{_hash}"
+                save_name = _save_name
+                warnings.warn(f"\n==========> WARNING <==========\n"\
+                        f"\tWe found an existing checkpoint so the "\
+                        f"current run is saved as {save_name}" \
+                        f".pt to avoid loss of data.\n"\
+                        f"Please check, you may have multiple backups!\n"
+                        f"===============================\n")
             if i % args.logging.print_freq == 0:
                 if wandb and args.logging.wandb:
                     wandb_dict.update({
@@ -411,30 +435,8 @@ def train(args, generator, g_ema, ckpt=None):
                 # quick save since fid and analysis is most likely point for 
                 # crash  We'll overwrite this checkpoint but want to provide 
                 # robustness here to avoid unnecessary compute
-                if args.logging.checkpoint_path[0] != "/":
-                    ckpt_path = args.save_root + args.logging.checkpoint_path
-                else:
-                    ckpt_path = args.logging.checkpoint_path
-                save_name = f"{ckpt_path}/{str(i).zfill(6)}"
-                # Don't overwrite existing checkpoint!
-                if os.path.exists(f"{save_name}.pt"):
-                    _hash = "".join(random.choices(
-                        string.ascii_uppercase + string.ascii_lowercase \
-                        + string.digits, k=4))
-                    _save_name = f"{save_name}_{_hash}"
-                    while os.path.exists(f"{_save_name}.pt"):
-                        _hash = "".join(random.choices(
-                            string.ascii_uppercase + string.ascii_lowercase \
-                            + string.digits, k=4))
-                        _save_name = f"{save_name}_{_hash}"
-                    save_name = _save_name
-                    warnings.warn(f"\n==========> WARNING <==========\n"\
-                            f"\tWe found an existing checkpoint so the "\
-                            f"current run is saved as {save_name}" \
-                            f".pt to avoid loss of data.\n"\
-                            f"Please check, you may have multiple backups!\n"
-                            f"===============================\n")
                 torch.save(save_dict, f"{save_name}.pt")
+                print(f"Saved checkpoint to {save_name}.pt")
                 fid = evaluate(args,
                                generator=g_ema,
                                steps=None if args.logging.reuse_samplepath else imgs_processed,
@@ -490,6 +492,7 @@ def train(args, generator, g_ema, ckpt=None):
                         "eval_info": eval_dict,
                     })
                 torch.save(save_dict, f"{save_name}.pt")
+                print(f"Saved checkpoint to {save_name}.pt")
                 # Clear save_dict and eval_dict after save
                 save_dict, eval_dict = {}, {}
             if wandb_dict != {}:

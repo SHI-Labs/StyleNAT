@@ -11,6 +11,14 @@ from torch.nn.init import trunc_normal_
 import warnings
 import os
 from natten.functional import natten2dqkrpb, natten2dav
+from natten import (
+      enable_fused_na,
+      disable_fused_na,
+      enable_autotuner,
+      disable_autotuner
+)
+enable_fused_na()
+enable_autotuner()
 
 class HydraNeighborhoodAttention(nn.Module):
     def __init__(self,

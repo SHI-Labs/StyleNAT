@@ -1,3 +1,4 @@
+from rich import print
 import time
 import os
 from tqdm import tqdm
@@ -12,7 +13,7 @@ from utils import fid_score
 from utils.improved_precision_recall import IPR
 from utils.distributed import get_rank
 
-@torch.no_grad()
+@torch.inference_mode()
 def save_images_batched(args, generator, steps=None, log_first_batch=True):
     if args.logging.sample_path[0] != "/":
         path = args.save_root + args.logging.sample_path
@@ -43,7 +44,7 @@ def save_images_batched(args, generator, steps=None, log_first_batch=True):
                 for j, img in enumerate(sample))
         cnt += args.evaluation.batch
 
-@torch.no_grad()
+@torch.inference_mode()
 def clear_directory(args):
     if args.logging.sample_path[0] != "/":
         path = args.save_root + args.logging.sample_path
@@ -58,7 +59,7 @@ def clear_directory(args):
             (path + img) for img in _files)
 
 
-@torch.no_grad()
+@torch.inference_mode()
 def evaluate(args,
              generator,            # Should be g_ema
              steps=None,           # Save to specific eval dir or common

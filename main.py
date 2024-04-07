@@ -1,3 +1,4 @@
+from rich import print
 import hydra
 import os
 import random
@@ -15,6 +16,9 @@ from src.inference import inference
 from src.evaluate import evaluate
 from src.analysis import visualize_attention
 
+torch.backends.cudnn.benchmark = True
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 def validate_args(args):
     '''
     Check some of the args and do some sanity checking
@@ -250,7 +254,6 @@ def main(args):
             raise ValueError(f"Checkpoint dict broken:\n"\
                     f"Checkpoint name: {args.restart.ckpt}\n"
                     f"Keys: {ckpt.keys()}")
-
     g_ema.eval()
 
     # Print mode in a nice format
