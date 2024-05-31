@@ -12,13 +12,11 @@ import warnings
 import os
 from natten.functional import natten2dqkrpb, natten2dav
 from natten import (
-      enable_fused_na,
-      disable_fused_na,
-      enable_autotuner,
-      disable_autotuner
+    use_fused_na,
+    use_autotuner
 )
-enable_fused_na()
-enable_autotuner()
+use_fused_na(True)
+use_autotuner(True)
 
 class HydraNeighborhoodAttention(nn.Module):
     def __init__(self,
