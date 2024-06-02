@@ -10,7 +10,7 @@ from dataset.dataset import unnormalize
 toPIL = T.ToPILImage()
 toTensor = T.ToTensor()
 
-@torch.no_grad()
+@torch.inference_mode()
 def add_watermark(image, im_size, watermark_path="assets/watermark.jpg",
                   wmsize=16, bbuf=5, opacity=0.9):
     '''
@@ -58,13 +58,12 @@ def extract_range(args):
     args.inference.seeds = list(range(int(start), int(end), int(step_size)))
     print(f"Using Range of Seeds from {start} to {end} with a step size of {step_size}")
 
-@torch.no_grad()
+@torch.inference_mode()
 def inference(args, generator):
     save_path = args.inference.save_path
     if save_path[0] != "/":
         save_path = args.save_root + save_path
-    assert(os.path.exists(save_path)),f"Save path "\
-            f"{save_path} does not exist"
+    assert(os.path.exists(save_path)),f"Path {save_path} does not exist"
     assert('num_images' in args.inference or 'seeds' in args.inference),\
             f"Inference must either specify a number of images "\
             f"(random seed generation) or a set of seeds to use to generate."

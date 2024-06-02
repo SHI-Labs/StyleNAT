@@ -1,0 +1,48 @@
+type: train
+device: cuda
+latent: 4096
+world_size: 1
+rank: 0
+local_rank: 0
+distributed: False
+workers: 0
+save_root: "/tmp/"
+
+inference:
+  num_images: 1
+  save_path: "./"
+  batch: 1
+
+logging:
+  print_freq: 1000
+  eval_freq: 50000
+  save_freq: 25000
+  checkpoint_path: "checkpoints"
+  sample_path: "samples"
+  reuse_samplepath: True
+  log_img_batch: False
+  wandb: False
+
+evaluation:
+  total_size: 50000
+  num_batches: 12500
+  batch: 4
+  attn_map: True
+  save_attn_map: False
+  attn_map_path: "attn_maps"
+  const_attn_seed: True
+
+inference:
+  num_images: 1
+  batch: 1
+  seeds: range(0,10)
+  save_path: "inference_samples"
+
+restart:
+  wandb_resume: False
+  reuse_rng: True
+
+misc:
+  seed: null
+  rng_state: null
+  py_rng_state: null

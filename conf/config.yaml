@@ -6,15 +6,21 @@ rank: 0
 local_rank: 0
 distributed: True
 workers: 0
-save_root: used/for/checkpoints/and/sample/paths
+save_root: checkpoints
 
 defaults:
-    - _self_
+    - default_conf
     - runs: ffhq_256
+    - _self_
 
 dataset:
     name: ffhq
     path: /data/datasets/ffhq_256
+
+inference:
+    num_images: 1
+    save_path: sample_images
+    batch: 1
 
 logging:
     wandb: False

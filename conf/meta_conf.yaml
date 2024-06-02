@@ -18,8 +18,8 @@ workers: (opt:int) Number of workers to spawn for dataloader default 0 (use this
 save_root: (opt:str) root path for saving. If other paths don't start with / then we assume relative from here
 
 defaults:
-    - _self_
     - runs: (req:str) Which yaml file to use from the run dir
+    - _self_
 
 dataset:
     (req for all)
