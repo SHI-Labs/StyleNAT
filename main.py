@@ -34,7 +34,7 @@ def main(args):
         logging.getLogger().setLevel(_logging_level)
     else:
         logging.getLogger().setLevel(logging.WARNING)
-    helpers.validate_args(args)
+    #helpers.validate_args(args)
     ckpt = None
     if "restart" in args and "ckpt" in args.restart and args.restart.ckpt:
         assert(os.path.exists(args.restart.ckpt)),f"Can't find a checkpoint "\
@@ -49,7 +49,7 @@ def main(args):
                 except:
                     args.restart.start_iter = 0
 
-    helpers.rng_reproducibility(args, ckpt)
+    #helpers.rng_reproducibility(args, ckpt)
     #if "WORLD_SIZE" in os.environ:
     #    # Single node multi GPU
     #    n_gpu = int(os.environ["WORLD_SIZE"])
