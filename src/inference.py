@@ -1,3 +1,4 @@
+from rich import print
 import os
 import time
 from PIL import Image
@@ -63,7 +64,9 @@ def inference(args, generator):
     save_path = args.inference.save_path
     if save_path[0] != "/":
         save_path = args.save_root + save_path
-    assert(os.path.exists(save_path)),f"Path {save_path} does not exist"
+    if not os.path.exists(save_path):
+        print(f"[bold yellow]WARNING:[/] {save_path} does not exist.  Creating...")
+        os.mkdir(save_path)
     assert('num_images' in args.inference or 'seeds' in args.inference),\
             f"Inference must either specify a number of images "\
             f"(random seed generation) or a set of seeds to use to generate."

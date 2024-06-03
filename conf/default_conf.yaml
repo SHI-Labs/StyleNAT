@@ -10,8 +10,9 @@ save_root: "/tmp/"
 
 inference:
   num_images: 1
-  save_path: "./"
   batch: 1
+  seeds: range(0,10)
+  save_path: "inference_samples"
 
 logging:
   print_freq: 1000
@@ -31,12 +32,6 @@ evaluation:
   save_attn_map: False
   attn_map_path: "attn_maps"
   const_attn_seed: True
-
-inference:
-  num_images: 1
-  batch: 1
-  seeds: range(0,10)
-  save_path: "inference_samples"
 
 restart:
   wandb_resume: False

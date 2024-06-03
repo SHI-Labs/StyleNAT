@@ -1,3 +1,8 @@
+defaults:
+    - default_conf
+    - runs: ffhq_256
+    - _self_
+
 type: train
 device: cuda
 latent: 4096
@@ -6,12 +11,7 @@ rank: 0
 local_rank: 0
 distributed: True
 workers: 0
-save_root: checkpoints
-
-defaults:
-    - default_conf
-    - runs: ffhq_256
-    - _self_
+save_root: ./
 
 dataset:
     name: ffhq

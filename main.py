@@ -49,7 +49,7 @@ def main(args):
                 except:
                     args.restart.start_iter = 0
 
-    rng_reproducibility(args, ckpt)
+    helpers.rng_reproducibility(args, ckpt)
     #if "WORLD_SIZE" in os.environ:
     #    # Single node multi GPU
     #    n_gpu = int(os.environ["WORLD_SIZE"])
