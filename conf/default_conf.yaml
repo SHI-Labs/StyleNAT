@@ -28,9 +28,11 @@ evaluation:
   num_batches: 12500
   batch: 4
   attn_map: True
-  save_attn_map: False
-  attn_map_path: "attn_maps"
+
+analysis:
+  save_path: "attn_maps"
   const_attn_seed: True
+  attn_seed: 0
 
 restart:
   wandb_resume: False

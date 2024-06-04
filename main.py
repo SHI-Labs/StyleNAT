@@ -23,7 +23,6 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
-
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(args):
     if "logging_level" in args:
@@ -99,7 +98,7 @@ def main(args):
             if args.logging.checkpoint_path[0] != "/":
                 ckpt_path = args.save_root + ckpt_path
         if not os.path.exists(ckpt_path):
-            print(f"====> MAKING CHECKPOINT DIRECTORY: {cpkt_path}")
+            print(f"====> MAKING CHECKPOINT DIRECTORY: {ckpt_path}")
             os.mkdir(ckpt_path)
 
 
@@ -131,10 +130,29 @@ def main(args):
             if args.type == "train":
                 generator = Generator(args=args.runs.generator,
                         size=args.runs.size, legacy=True).to(args.device)
-                generator.load_state_dict(ckpt['g'])
+                try:
+                    generator.load_state_dict(ckpt['g'])
+                except Exception as e:
+                    print(e)
+                    print(f"[bold red]ERROR:[/] Failed to load checkpoint. " \
+                          f"Likely a mismatch between kernel size or dilation " \
+                          f"in the config and the checkpoint. "\
+                          f"Checkpoint has kernels {args.runs.generator.kernels}, " \
+                          f"and dilations {args.runs.generator.dilations}")
+                    exit(1)
             g_ema = Generator(args=args.runs.generator,
                     size=args.runs.size, legacy=True).to(args.device)
-            g_ema.load_state_dict(ckpt["g_ema"])
+            try:
+                g_ema.load_state_dict(ckpt["g_ema"])
+            except Exception as e:
+                print(e)
+                print(f"[bold red]ERROR:[/] Failed to load checkpoint. " \
+                      f"Likely a mismatch between kernel size or dilation " \
+                      f"in the config and the checkpoint. "\
+                      f"\nCheckpoint has " \
+                      f"\n\tkernels {args.runs.generator.kernels}, " \
+                      f"\n\tdilations {args.runs.generator.dilations}")
+                exit(1)
         else:
             raise ValueError(f"Checkpoint dict broken:\n"\
                     f"Checkpoint name: {args.restart.ckpt}\n"
@@ -159,7 +177,7 @@ def main(args):
         evaluate(args=args, generator=g_ema)
     elif args.type == "attention_map":
         visualize_attention(args, g_ema,
-                            save_maps=args.evaluation.save_attn_map,
+                            save_maps=args.analysis.save_path,
                             )
     elif args.type == "throughput":
         throughput(generator=g_ema,

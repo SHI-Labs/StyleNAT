@@ -9,7 +9,7 @@ latent: 4096
 world_size: 1
 rank: 0
 local_rank: 0
-distributed: True
+distributed: False
 workers: 0
 save_root: results
 

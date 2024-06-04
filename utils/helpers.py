@@ -25,7 +25,7 @@ def validate_args(args):
     We'll define default values here so that users don't need to 
     set them themselves. Reduce user burden, reduce user error.
     '''
-    assert(args.type in _allowed_run_types)
+    assert(args.type in _allowed_run_types),f"Type must be from {_allowed_run_types} but got {args.type}"
     arg_keys = args.keys()
     with open_dict(args):
         if "rank" not in arg_keys: check_and_set_hydra(args,"rank",0)
