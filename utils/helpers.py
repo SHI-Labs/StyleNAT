@@ -5,6 +5,9 @@ import warnings
 import logging
 from omegaconf import OmegaConf, open_dict
 import torch
+from rich import print
+# For legacy
+import argparse 
 
 def check_and_set_hydra(args, key : str, value : Any) -> None:
     if hasattr(args, key):
@@ -101,40 +104,79 @@ def rng_reproducibility(args, ckpt=None):
         else:
             random.setstate(args.misc.py_rng_state)
 
-    if ckpt is not None and "reuse_rng" in args.restart and args.restart.reuse_rng:
+    if ckpt is not None \
+            and "reuse_rng" in args.restart \
+            and args.restart.reuse_rng:
         with open_dict(args):
-            if "misc" in ckpt['args'].keys() and "seed" in ckpt['args']['misc'].keys():
-                args.misc.seed = ckpt['args']['misc']['seed']
-            else:
-                warnings.warn("No seed found in checkpoint arguments")
-            if "misc" in ckpt['args'].keys() and "rng_state" in ckpt['args']['misc'].keys():
-                args.misc.rng_state= ckpt['args']['misc']['rng_state']
-            else:
-                warnings.warn("No rng_state found in checkpoint arguments")
-            if "misc" in ckpt['args'].keys() and "py_rng_state" in ckpt['args']['misc'].keys():
-                args.misc.rng_state= ckpt['args']['misc']['py_rng_state']
-            else:
-                warnings.warn("No py_rng_state found in checkpoint arguments")
+            #if "misc" in ckpt['args'].keys() and "seed" in ckpt['args']['misc'].keys():
+            try:
+                if hasattr(ckpt['args'], "misc"):
+                    if hasattr(ckpt['args']['misc'], "seed"):
+                        try:
+                            args.misc.seed = ckpt['args']['misc']['seed']
+                            print(f"[bold green]RNG Seed successfully loaded")
+                        except:
+                            print("[bold yellow]Seed couldn't be loaded (new style ckpt)")
+                    else:
+                        print("[bold yellow]Couldn't find seed (new style ckpt)")
+                    if hasattr(ckpt['args']['misc'], 'rng_state'):
+                        try:
+                            args.misc.rng_state = ckpt['args']['misc']['rng_state']
+                            print(f"[bold green]RNG State successfully loaded")
+                        except:
+                            print("[bold yellow]RNG State couldn't be loaded (new style ckpt)")
+                    else:
+                        print("[bold yellow]Couldn't find RNG State (new style ckpt)")
+                    if hasattr(ckpt['args']['misc'], 'py_rng_state'):
+                        try:
+                            args.misc.py_rng_state = ckpt['args']['misc']['py_rng_state']
+                            print(f"[bold green] Py-RNG State successfully loaded")
+                        except:
+                            print("[bold yellow]Py-RNG State couldn't be loaded (new style ckpt)")
+                    else:
+                        print("[bold yellow]Couldn't find Py-RNG State (new style ckpt)")
+                elif type(ckpt['args']) == argparse.Namespace:
+                    try:
+                        args.misc.seed = ckpt['args'].seed
+                        print(f"[bold green]RNG Seed successfully loaded")
+                    except:
+                        print("[bold yellow]Seed couldn't be loaded (old style ckpt)")
+                    try:
+                        args.misc.rng_state = ckpt['args'].rng_state.tolist()
+                        print(f"[bold green]RNG State successfully loaded")
+                    except:
+                        print("[bold yellow]RNG State couldn't be loaded (old style ckpt)")
+                    try:
+                        args.misc.py_rng_state = ckpt['args'].rng_state.tolist()
+                        print(f"[bold green] Py-RNG State successfully loaded")
+                    except:
+                        print("[bold yellow]Py-RNG State couldn't be loaded (old style ckpt)")
+                else:
+                    print("[bold yellow]No rng loading. {type(ckpt['args'])=}")
+            except:
+                print("[bold yellow]Seeds couldn't be loaded and don't know why")
+                print(f"[bold yellow]\t {type(ckpt['args'])}")
+                print(f"{type(ckpt['args']) == argparse.Namespace}")
         try:
             torch.manual_seed(args.misc.seed)
-            _seed = True
+            _seed = "[bold green]True[/]"
         except:
-            warnings.warn("Unable to set manual_seed")
-            _seed = False
+            print("[bold yellow]Unable to set manual_seed")
+            _seed = "[bold red]False[/]"
         try:
             torch.set_rng_state(torch.as_tensor(
-                ckpt['args']['misc']['rng_state'], dtype=torch.uint8),
+                args.misc.rng_state, dtype=torch.uint8),
             )
-            _pt_rng = True
+            _pt_rng = "[bold green]True[/]"
         except:
-            warnings.warn("Unable to set ptyroch's rng state")
-            _pt_rng = False
+            print("[bold yellow]Unable to set ptyroch's rng state")
+            _pt_rng = "[bold red]False[/]"
         try:
-            l = tuple(ckpt['args']['misc']['py_rng_state'])
+            l = tuple(args.misc.py_rng_state)
             random.setstate((l[0], tuple(l[1]), l[2]))
-            _py_rng = True
+            _py_rng = "[bold green]True[/]"
         except:
-            warnings.warn("Unable to set python's rng state")
-            _py_rng = False
-        print(f"RNG Loading Success States:\n"\
+            print("[bold yellow]Unable to set python's rng state")
+            _py_rng = "[bold red]False[/]"
+        print(f"[bold green]RNG Loading Success States:[/]\n"\
               f"\tSeed: {_seed}, PyTorch RNG: {_pt_rng}, Python RNG {_py_rng}")
