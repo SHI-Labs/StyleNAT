@@ -1,3 +1,4 @@
+from rich import print
 import os
 import time
 from PIL import Image
@@ -10,7 +11,7 @@ from dataset.dataset import unnormalize
 toPIL = T.ToPILImage()
 toTensor = T.ToTensor()
 
-@torch.no_grad()
+@torch.inference_mode()
 def add_watermark(image, im_size, watermark_path="assets/watermark.jpg",
                   wmsize=16, bbuf=5, opacity=0.9):
     '''
@@ -58,18 +59,20 @@ def extract_range(args):
     args.inference.seeds = list(range(int(start), int(end), int(step_size)))
     print(f"Using Range of Seeds from {start} to {end} with a step size of {step_size}")
 
-@torch.no_grad()
+@torch.inference_mode()
 def inference(args, generator):
     save_path = args.inference.save_path
     if save_path[0] != "/":
         save_path = args.save_root + save_path
-    assert(os.path.exists(save_path)),f"Save path "\
-            f"{save_path} does not exist"
+    if not os.path.exists(save_path):
+        print(f"[bold yellow]WARNING:[/] (Inference) {save_path} does not exist.  Creating...")
+        os.mkdir(save_path)
     assert('num_images' in args.inference or 'seeds' in args.inference),\
             f"Inference must either specify a number of images "\
             f"(random seed generation) or a set of seeds to use to generate."
     if 'num_images' in args.inference:
         num_imgs = args.inference.num_images
+        print(f"Got {num_imgs=}, {args.inference.num_images=}")
     if "seeds" in args.inference and args.inference.seeds is not None: 
         # Handles "range(start, end)" input from hydra file 
         if "range" in args.inference.seeds:
@@ -77,6 +80,10 @@ def inference(args, generator):
             num_imgs = len(args.inference.seeds)
         else:
             num_imgs = len(args.inference.seeds)
+        if "num_images" in args.inference and args.inference.num_images != num_imgs:
+            print(f"[bold red]WARNING:[/] You asked for "\
+                  f"{args.inference.num_images} image in the config but specified " \
+                  f"seeds. Seeds overrides and you will get {num_imgs} images.")
 
     for i in range(num_imgs):
         if "seeds" in args.inference and args.inference.seeds is not None and \
@@ -94,3 +101,4 @@ def inference(args, generator):
         sample = add_watermark(sample, im_size=args.runs.size)
         save_image(sample, f"{save_path}/{seed}.png",
                    nrow=1, padding=0, normalize=True, value_range=(0,1))
+        print(f"Saved {save_path}/{seed}.png")

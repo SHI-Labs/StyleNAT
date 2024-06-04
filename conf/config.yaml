@@ -1,20 +1,26 @@
+defaults:
+    - default_conf
+    - runs: ffhq_256
+    - _self_
+
 type: train
 device: cuda
 latent: 4096
 world_size: 1
 rank: 0
 local_rank: 0
-distributed: True
+distributed: False
 workers: 0
-save_root: used/for/checkpoints/and/sample/paths
-
-defaults:
-    - _self_
-    - runs: ffhq_256
+save_root: results
 
 dataset:
     name: ffhq
     path: /data/datasets/ffhq_256
+
+inference:
+    num_images: 10
+    save_path: sample_images
+    batch: 1
 
 logging:
     wandb: False
@@ -22,8 +28,8 @@ logging:
     print_freq: 1000
     eval_freq: 50000
     save_freq: 25000
-    checkpoint_path: relative/from/save_path
-    sample_path: relative/from/save_path
+    checkpoint_path: checkpoints
+    sample_path: eval_samples
     reuse_samplepath: True
 
 evaluation:

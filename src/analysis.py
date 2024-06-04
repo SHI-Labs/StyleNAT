@@ -11,7 +11,7 @@ from matplotlib import cm
 import wandb
 
 from dataset.dataset import unnormalize
-from natten.functional import natten2dqkrpb, natten2dav
+from natten.functional import na2d_av, na2d_qk
 
 def analysis(args, generator):
     if args.analysis.type.lower() == "attention":
@@ -51,7 +51,10 @@ def attn_wrapper(attn_object,
             q, k, v = _q, _k, _v
 
 
-        attention = [natten2dqkrpb(_q, _k, _rpb, _kernel_size, _dilation) for \
+        attention = [na2d_qk(_q, _k,
+                             rpb=_rpb,
+                             kernel_size=_kernel_size,
+                             dilation=_dilation) for \
                 _q,_k,_rpb,_kernel_size, _dilation in \
                 zip(q, k, attn_object.rpb,
                     attn_object.kernel_sizes, attn_object.dilations)]
@@ -71,7 +74,9 @@ def attn_wrapper(attn_object,
         ############################
         attention = [attn_object.attn_drop(a) for a in attention]
 
-        x = [natten2dav(_attn, _v, _k, _d) for _attn, _v, _k, _d in \
+        x = [na2d_av(_attn, _v,
+                     kernel_size=_k,
+                     dilation=_d) for _attn, _v, _k, _d in \
                 zip(attention, v, attn_object.kernel_sizes, attn_object.dilations)]
 
         x = torch.cat(x, dim=1)
@@ -91,14 +96,22 @@ def attn_wrapper(attn_object,
         v0, v1 = v.chunk(chunks=2, dim=1)
 
         # TODO: fix natten signature for legacy
-        attn0 = natten2dqkrpb(q0, k0, attn_object.rpb0, attn_object.dilation_0)
+        attn0 = na2d_qk(q0, k0,
+                        kernel_size=attn_object.kernel_size_0,
+                        dilation=attn_object.dilation_0,
+                        rpb=attn_object.rpb0,
+                        )
         attn0 = attn0.softmax(dim=-1)
         attn0_ = attn_object.attn_drop(attn0)
 
-        x0 = natten2dav(attn0_, v0, attn_object.dilation_0)
+        x0 = na2d_av(attn0_, v0,
+                     kernel_size=attn_object.kernel_size_0,
+                     dilation=attn_object.dilation_0)
 
-        # TODO: fix natten signature for legacy
-        attn1 = natten2dqkrpb(q1, k1, attn_object.rpb1, attn_object.dilation_1)
+        attn1 = na2d_qk(q1, k1, 
+                        kernel_size=attn_object.kernel_size_1,
+                        dilation=attn_object.dilation_1,
+                        rpb=attn_object.rpb1)
         attn1 = attn1.softmax(dim=-1)
         attn1_ = attn_object.attn_drop(attn1)
 
@@ -113,7 +126,9 @@ def attn_wrapper(attn_object,
                 f"{qq.shape}, {kk.shape}, {aa.shape}")
         ############################
 
-        x1 = natten2dav(attn1_, v1, attn_object.dilation_1)
+        x1 = na2d_av(attn1_, v1,
+                     kernel_size=attn_object.kernel_size_1,
+                     dilation=attn_object.dilation_1)
 
         x = torch.cat([x0, x1],dim=1)
 
@@ -231,10 +246,10 @@ def visualize_attention(args, generator,
                         commit_wandb=False,
                         ):
     if save_maps:
-        if "attn_map_path" not in args.evaluation:
+        if args.analysis.save_path[-1] != "/":
+            args.analysis.save_path += "/"
+        if "save_path" not in args.analysis:
             path = args.save_root
-        elif args.evaluation.attn_map_path[0] == "/":
-            path = args.evaluation.attn_map_path
         else:
             path = args.save_root + args.evaluation.attn_map_path
         if not os.path.exists(path):
@@ -262,21 +277,21 @@ def visualize_attention(args, generator,
     # constant between evaluations and so we can reload if a crash.
     # We only change the rng state for the image sampling, then we set the state
     # back.
-    if "const_attn_seed" in args.evaluation and \
-            args.evaluation.const_attn_seed is not False:
+    if "const_attn_seed" in args.analysis and \
+            args.analysis.const_attn_seed is not False:
             _torch_rng_state = torch.random.get_rng_state()
             _py_rng_state = random.getstate()
             # If user used a bool, just set it to 42
-            if args.evaluation.const_attn_seed is True:
+            if args.analysis.const_attn_seed is True:
                 with open_dict(args):
-                    args.evaluation.attn_seed = 42
-            torch.manual_seed(args.evaluation.attn_seed)
-            random.seed(args.evaluation.attn_seed)
+                    args.analysis.attn_seed = 42
+            torch.manual_seed(args.analysis.attn_seed)
+            random.seed(args.analysis.attn_seed)
     noise = torch.randn((1, args.runs.generator.style_dim)).to(args.device)
     sample, _ = generator(noise)
     sample = unnormalize(sample)
-    if "const_attn_seed" in args.evaluation and \
-            args.evaluation.const_attn_seed is not False:
+    if "const_attn_seed" in args.analysis and \
+            args.analysis.const_attn_seed is not False:
             torch.set_rng_state(_torch_rng_state)
             random.setstate(_py_rng_state)
     if save_maps:
@@ -336,6 +351,7 @@ def visualize_attention(args, generator,
         logging.debug(f"Grid shape {grid.shape}")
         if save_maps:
             save_image(grid, f"{path}/{k}.png")
+            print(f"Saved attention map to {path}/{k}.png")
         if log_wandb:
             wandb.log({f"Attn_Map_{k}": wandb.Image(grid)}, commit=False)
 

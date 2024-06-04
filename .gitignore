@@ -7,3 +7,4 @@ wandb/
 *.gz
 checkpoints/
 samples/
+tags

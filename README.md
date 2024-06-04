@@ -43,11 +43,15 @@ recommend the following build instructions but your millage may vary.
 conda create --name stylenat python=3.10
 conda activate stylenat
 conda install pytorch torchvision cudatoolkit=11.6 -c pytorch -c nvidia
-pip install -r requirements.txt
+# Use xargs to install lines one at a time since natten requires torch to be installed first
+cat requirements.txt | xargs -L1 pip install 
 ```
 Note: some version issues can create poor FIDs. Always check your build
 environment first with the `evaluate` method. With the best FFHQ score you
 should always get under an FID < 2.10 (hopefully closer to 2.05). 
+
+Note: You may need to install torch and torchvision first due to dependence. Pip
+does not build sequentially and NATTEN may fail to build. 
 
 Notes: 
 - [NATTEN can be sped up by using pre-built wheels directly.](https://shi-labs.com/natten/)

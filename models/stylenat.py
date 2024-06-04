@@ -10,7 +10,8 @@ from torch import nn
 from torch.nn.init import trunc_normal_
 import warnings
 import os
-from natten.functional import natten2dqkrpb, natten2dav
+#from natten.functional import natten2dqkrpb, natten2dav, 
+from natten.functional import na2d_av, na2d_qk
 from natten import (
     use_fused_na,
     use_autotuner
@@ -108,12 +109,17 @@ class HydraNeighborhoodAttention(nn.Module):
             q, k, v = _q, _k, _v
 
 
-        attention = [natten2dqkrpb(_q, _k, _rpb, _kernel_size, _dilation) \
+        attention = [na2d_qk(_q, _k,
+                             kernel_size=_kernel_size,
+                             dilation=_dilation,
+                             rpb=_rpb) \
                      for _q,_k,_rpb,_kernel_size,_dilation in zip(q, k, self.rpb, self.kernel_sizes, self.dilations)]
         attention = [a.softmax(dim=-1) for a in attention]
         attention = [self.attn_drop(a) for a in attention]
 
-        x = [natten2dav(_attn, _v, _k, _d) \
+        x = [na2d_av(_attn, _v,
+                     kernel_size=_k,
+                     dilation=_d) \
              for _attn, _v, _k, _d in zip(attention, v, self.kernel_sizes, self.dilations)]
 
         x = torch.cat(x, dim=1)
@@ -249,17 +255,31 @@ class NeighborhoodAttentionSplitHead(nn.Module):
         k0, k1 = k.chunk(chunks=2, dim=1)
         v0, v1 = v.chunk(chunks=2, dim=1)
 
-        attn0 = natten2dqkrpb(q0, k0, self.rpb0, self.kernel_size_0, self.dilation_0)
+        attn0 = na2d_qk(q0, k0, 
+                        kernel_size=self.kernel_size_0,
+                        dilation=self.dilation_0,
+                        rpb=self.rpb0,
+                        )
         attn0 = attn0.softmax(dim=-1)
         attn0 = self.attn_drop(attn0)
 
-        x0 = natten2dav(attn0, v0, self.kernel_size_0, self.dilation_0)
+        x0 = na2d_av(attn0, v0,
+                     kernel_size=self.kernel_size_0,
+                     dilation=self.dilation_0,
+                     )
 
-        attn1 = natten2dqkrpb(q1, k1, self.rpb1, self.kernel_size_1, self.dilation_1)
+        attn1 = na2d_qk(q1, k1,
+                        kernel_size=self.kernel_size_1,
+                        dilation=self.dilation_1,
+                        rpb=self.rpb1,
+                        )
         attn1 = attn1.softmax(dim=-1)
         attn1 = self.attn_drop(attn1)
 
-        x1 = natten2dav(attn1, v1, self.kernel_size_1, self.dilation_1)
+        x1 = na2d_av(attn1, v1,
+                     kernel_size=self.kernel_size_1,
+                     dilation=self.dilation_1,
+                     )
 
         x = torch.cat([x0, x1],dim=1)
 

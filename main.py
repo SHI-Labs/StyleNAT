@@ -7,143 +7,21 @@ from datetime import timedelta
 import logging
 import torch
 from omegaconf import OmegaConf, open_dict
+import natten
 
 from models.generator import Generator
 from utils.distributed import get_rank, synchronize, get_world_size
+from utils import helpers
 
 from src.train import train
 from src.inference import inference
 from src.evaluate import evaluate
 from src.analysis import visualize_attention
+from src.throughput import throughput
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
-def validate_args(args):
-    '''
-    Check some of the args and do some sanity checking
-    We'll define default values here so that users don't need to 
-    set them themselves. Reduce user burden, reduce user error.
-    '''
-    assert(args.type in ['train', 'inference', 'evaluate', 'attention_map'])
-    arg_keys = args.keys()
-    with open_dict(args):
-        if "rank" not in arg_keys: args.rank = 0
-        if "device" not in arg_keys: args.device = "cpu"
-        if "world_size" not in arg_keys: args.world_size = 1
-        if "rank" not in arg_keys: args.rank = 0
-        if "local_rank" not in arg_keys: args.local_rank = 0
-        if "distributed" not in arg_keys: #args.distributed = False
-            if "WORLD_SIZE" in os.environ:
-                # Single node multi GPU
-                n_gpu = int(os.environ["WORLD_SIZE"])
-            else:
-                n_gpu = torch.cuda.device_count()
-            args.distributed = n_gpu > 1
-        if "workers" not in arg_keys: args.workers = 0
-        # Validate training args
-        if args.type == "train":
-            # logging
-            assert(hasattr(args, "logging"))
-            if "print_freq" not in args.logging:
-                args.logging.print_freq = 10000
-            if "eval_freq" not in args.logging:
-                args.logging.eval_freq = -1
-            if "save_freq" not in args.logging:
-                args.logging.save_freq = -1
-            if "checkpoint_path" in args.logging:
-                if args.logging.checkpoint_path[-1] != "/":
-                    args.logging.checkpoint_path += "/"
-            if "sample_path" in args.logging:
-                if args.logging.sample_path[-1] != "/":
-                    args.logging.sample_path += "/"
-            if "reuse_samplepath" not in args.logging:
-                args.logging.reuse_samplepath = False
-        if args.type == "evaluation" or args.type == "train":
-            assert(hasattr(args.evaluation, "gt_path")),f"You must specify "\
-                    f"the ground truth data path"
-            assert(hasattr(args.evaluation, "total_size")),f"You must specify "\
-                    f"the number of images for FID"
-            if "batch" not in args.evaluation:
-                args.evaluation.batch = 1
-            if "save_root" not in args:
-                args.save_root = "/tmp/"
-                if args.type == "training":
-                    logging.warning("Save root path not set, using /tmp")
-            if args.save_root[-1] != "/":
-                args.save_root += "/"
-        if args.type == "inference":
-            if "batch" not in args.inference:
-                args.inference.batch = 1
-        #    assert(hasattr(args.evaluation, "gt_path"))
-        if "misc" not in args.keys():
-            args.misc = {}
-            args.misc.seed = None
-            args.misc.rng_state = None
-            args.misc.py_rng_state = None
-        else:
-            if "seed" not in args.misc:
-                args.misc.seed = None
-            if "rng_state" not in args.misc:
-                args.misc.rng_state= None
-            if "py_rng_state" not in args.misc:
-                args.misc.rng_state= None
-
-def rng_reproducibility(args, ckpt=None):
-    # Store RNG info
-    # Cumbersome but reproducibility is not super easy
-    with open_dict(args):
-        if args.misc.seed is None:
-            args.misc.seed = torch.initial_seed()
-        else:
-            torch.manual_seed(args.misc.seed)
-        if args.misc.rng_state is None:
-            args.misc.rng_state = torch.get_rng_state().tolist()
-        else:
-            torch.set_rng_state(args.misc.rng_state)
-        if args.misc.py_rng_state is None:
-            args.misc.py_rng_state = random.getstate()
-        else:
-            random.setstate(args.misc.py_rng_state)
-
-    if ckpt is not None and "reuse_rng" in args.restart and args.restart.reuse_rng:
-        with open_dict(args):
-            if "misc" in ckpt['args'].keys() and "seed" in ckpt['args']['misc'].keys():
-                args.misc.seed = ckpt['args']['misc']['seed']
-            else:
-                warnings.warn("No seed found in checkpoint arguments")
-            if "misc" in ckpt['args'].keys() and "rng_state" in ckpt['args']['misc'].keys():
-                args.misc.rng_state= ckpt['args']['misc']['rng_state']
-            else:
-                warnings.warn("No rng_state found in checkpoint arguments")
-            if "misc" in ckpt['args'].keys() and "py_rng_state" in ckpt['args']['misc'].keys():
-                args.misc.rng_state= ckpt['args']['misc']['py_rng_state']
-            else:
-                warnings.warn("No py_rng_state found in checkpoint arguments")
-        try:
-            torch.manual_seed(args.misc.seed)
-            _seed = True
-        except:
-            warnings.warn("Unable to set manual_seed")
-            _seed = False
-        try:
-            torch.set_rng_state(torch.as_tensor(
-                ckpt['args']['misc']['rng_state'], dtype=torch.uint8),
-            )
-            _pt_rng = True
-        except:
-            warnings.warn("Unable to set ptyroch's rng state")
-            _pt_rng = False
-        try:
-            l = tuple(ckpt['args']['misc']['py_rng_state'])
-            random.setstate((l[0], tuple(l[1]), l[2]))
-            _py_rng = True
-        except:
-            warnings.warn("Unable to set python's rng state")
-            _py_rng = False
-        print(f"RNG Loading Success States:\n"\
-              f"\tSeed: {_seed}, PyTorch RNG: {_pt_rng}, Python RNG {_py_rng}")
-
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(args):
@@ -157,7 +35,7 @@ def main(args):
         logging.getLogger().setLevel(_logging_level)
     else:
         logging.getLogger().setLevel(logging.WARNING)
-    validate_args(args)
+    helpers.validate_args(args)
     ckpt = None
     if "restart" in args and "ckpt" in args.restart and args.restart.ckpt:
         assert(os.path.exists(args.restart.ckpt)),f"Can't find a checkpoint "\
@@ -172,7 +50,7 @@ def main(args):
                 except:
                     args.restart.start_iter = 0
 
-    rng_reproducibility(args, ckpt)
+    helpers.rng_reproducibility(args, ckpt)
     #if "WORLD_SIZE" in os.environ:
     #    # Single node multi GPU
     #    n_gpu = int(os.environ["WORLD_SIZE"])
@@ -195,6 +73,12 @@ def main(args):
         torch.cuda.set_device(args.local_rank)
         synchronize()
 
+    if get_rank() == 0:
+        if args.save_root[-1] != "/": args.save_root += "/"
+        if not os.path.exists(args.save_root):
+            print(f"[bold yellow]WARNING:[/] Save root {args.save_root} path "\
+                  f"does not exist. Creating...")
+            os.mkdir(args.save_root)
     if get_rank() == 0 and args.type in ['train']:
         # Make sample path
         if "sample_path" not in args.logging:
@@ -214,7 +98,7 @@ def main(args):
             if args.logging.checkpoint_path[0] != "/":
                 ckpt_path = args.save_root + ckpt_path
         if not os.path.exists(ckpt_path):
-            print(f"====> MAKING CHECKPOINT DIRECTORY: {cpkt_path}")
+            print(f"====> MAKING CHECKPOINT DIRECTORY: {ckpt_path}")
             os.mkdir(ckpt_path)
 
 
@@ -246,10 +130,29 @@ def main(args):
             if args.type == "train":
                 generator = Generator(args=args.runs.generator,
                         size=args.runs.size, legacy=True).to(args.device)
-                generator.load_state_dict(ckpt['g'])
+                try:
+                    generator.load_state_dict(ckpt['g'])
+                except Exception as e:
+                    print(e)
+                    print(f"[bold red]ERROR:[/] Failed to load checkpoint. " \
+                          f"Likely a mismatch between kernel size or dilation " \
+                          f"in the config and the checkpoint. "\
+                          f"Checkpoint has kernels {args.runs.generator.kernels}, " \
+                          f"and dilations {args.runs.generator.dilations}")
+                    exit(1)
             g_ema = Generator(args=args.runs.generator,
                     size=args.runs.size, legacy=True).to(args.device)
-            g_ema.load_state_dict(ckpt["g_ema"])
+            try:
+                g_ema.load_state_dict(ckpt["g_ema"])
+            except Exception as e:
+                print(e)
+                print(f"[bold red]ERROR:[/] Failed to load checkpoint. " \
+                      f"Likely a mismatch between kernel size or dilation " \
+                      f"in the config and the checkpoint. "\
+                      f"\nCheckpoint has " \
+                      f"\n\tkernels {args.runs.generator.kernels}, " \
+                      f"\n\tdilations {args.runs.generator.dilations}")
+                exit(1)
         else:
             raise ValueError(f"Checkpoint dict broken:\n"\
                     f"Checkpoint name: {args.restart.ckpt}\n"
@@ -274,8 +177,15 @@ def main(args):
         evaluate(args=args, generator=g_ema)
     elif args.type == "attention_map":
         visualize_attention(args, g_ema,
-                            save_maps=args.evaluation.save_attn_map,
+                            save_maps=args.analysis.save_path,
                             )
+    elif args.type == "throughput":
+        throughput(generator=g_ema,
+                   style_dim=args.runs.generator.style_dim,
+                   batch_size=args.throughput.batch_size,
+                   rounds=args.throughput.rounds,
+                   warmup=args.throughput.warmup,
+                   )
 
 
 if __name__ == '__main__':
