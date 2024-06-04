@@ -50,6 +50,9 @@ def clear_directory(args):
         path = args.save_root + args.logging.sample_path
     else:
         path = args.logging.sample_path
+    if not os.path.exists(path):
+        print(f"[bold yellow]WARNING:[/] (Evaluate) {path} does not exist.  Creating...")
+        os.mkdir(path)
     _files = os.listdir(path)
     if _files == []: 
         print(f"Directory {path} is already empty. Worry if not first time")

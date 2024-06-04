@@ -11,14 +11,14 @@ rank: 0
 local_rank: 0
 distributed: True
 workers: 0
-save_root: ./
+save_root: results
 
 dataset:
     name: ffhq
     path: /data/datasets/ffhq_256
 
 inference:
-    num_images: 1
+    num_images: 10
     save_path: sample_images
     batch: 1
 
@@ -28,8 +28,8 @@ logging:
     print_freq: 1000
     eval_freq: 50000
     save_freq: 25000
-    checkpoint_path: relative/from/save_path
-    sample_path: relative/from/save_path
+    checkpoint_path: checkpoints
+    sample_path: eval_samples
     reuse_samplepath: True
 
 evaluation:

@@ -7,16 +7,17 @@ from datetime import timedelta
 import logging
 import torch
 from omegaconf import OmegaConf, open_dict
+import natten
 
 from models.generator import Generator
 from utils.distributed import get_rank, synchronize, get_world_size
+from utils import helpers
 
 from src.train import train
 from src.inference import inference
 from src.evaluate import evaluate
 from src.analysis import visualize_attention
-from utils import helpers
-import natten
+from src.throughput import throughput
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -73,6 +74,12 @@ def main(args):
         torch.cuda.set_device(args.local_rank)
         synchronize()
 
+    if get_rank() == 0:
+        if args.save_root[-1] != "/": args.save_root += "/"
+        if not os.path.exists(args.save_root):
+            print(f"[bold yellow]WARNING:[/] Save root {args.save_root} path "\
+                  f"does not exist. Creating...")
+            os.mkdir(args.save_root)
     if get_rank() == 0 and args.type in ['train']:
         # Make sample path
         if "sample_path" not in args.logging:
@@ -154,6 +161,13 @@ def main(args):
         visualize_attention(args, g_ema,
                             save_maps=args.evaluation.save_attn_map,
                             )
+    elif args.type == "throughput":
+        throughput(generator=g_ema,
+                   style_dim=args.runs.generator.style_dim,
+                   batch_size=args.throughput.batch_size,
+                   rounds=args.throughput.rounds,
+                   warmup=args.throughput.warmup,
+                   )
 
 
 if __name__ == '__main__':

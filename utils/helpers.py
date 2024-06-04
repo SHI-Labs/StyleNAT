@@ -9,6 +9,8 @@ from rich import print
 # For legacy
 import argparse 
 
+_allowed_run_types=['train', 'inference', 'evaluate', 'attention_map', 'throughput']
+
 def check_and_set_hydra(args, key : str, value : Any) -> None:
     if hasattr(args, key):
         args['key'] = value
@@ -23,7 +25,7 @@ def validate_args(args):
     We'll define default values here so that users don't need to 
     set them themselves. Reduce user burden, reduce user error.
     '''
-    assert(args.type in ['train', 'inference', 'evaluate', 'attention_map'])
+    assert(args.type in _allowed_run_types)
     arg_keys = args.keys()
     with open_dict(args):
         if "rank" not in arg_keys: check_and_set_hydra(args,"rank",0)
